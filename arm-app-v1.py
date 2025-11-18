@@ -1374,7 +1374,6 @@ class RobotVisionGUI(QMainWindow):
                     print(f"[CLICK INFO] Position: ({obj_data['x_mm']:.1f}, {obj_data['y_mm']:.1f}) mm")
                     print(f"[CLICK INFO] Angle: {obj_data['angle']:.1f}°")
                     print(f"[CLICK INFO] Size: {obj_data['width']:.1f}x{obj_data['height']:.1f} mm")
-                    print(f"[CLICK INFO] INFO ONLY - Not sending command to robot")
                     # NOTE: write_click() is NOT called - no robot control
 
                 # Update detection info text
@@ -1404,7 +1403,6 @@ class RobotVisionGUI(QMainWindow):
                 if 0 <= click_x_mm <= workspace_width and 0 <= click_y_mm <= workspace_height:
                     print(f"[GUI CLICK] Empty space at pixel ({x}, {y})")
                     print(f"[CLICK INFO] Workspace position: ({click_x_mm:.1f}, {click_y_mm:.1f}) mm")
-                    print(f"[CLICK INFO] INFO ONLY - Not sending command to robot")
 
                     # Update detection info text
                     info_text = f"Clicked Position:\n"
@@ -1457,7 +1455,6 @@ class RobotVisionGUI(QMainWindow):
                     print(f"[INSPECT INFO] Target position: ({target_x_mm:.1f}, {target_y_mm:.1f}) mm")
                     print(f"[INSPECT INFO] Object angle: {obj_data['angle']:.1f}°")
                     print(f"[INSPECT INFO] Object size: {obj_data['width']:.1f}x{obj_data['height']:.1f} mm")
-                    print(f"[INSPECT INFO] INFO ONLY - Not sending command to robot")
                     # NOTE: write_inspect_command() is NOT called - no robot control
 
                 print(f"[GUI] Inspection box visualization opened")
