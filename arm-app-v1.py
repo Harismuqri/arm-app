@@ -82,6 +82,113 @@ class ClickableLabel(QLabel):
                 self.doubleClicked.emit(widget_x, widget_y)
 
 
+class SharedMemoryManager:
+    """Manages shared memory for detection data (writes object detections for xarm-motion to read)"""
+
+    def __init__(self, name="DetectionData", size=4096):
+        self.name = name
+        self.size = size
+        self.shm = None
+        self._initialize_shared_memory()
+
+    def _initialize_shared_memory(self):
+        """Create or attach to existing shared memory."""
+        try:
+            self.shm = shared_memory.SharedMemory(name=self.name, create=True, size=self.size)
+            print(f"[INFO] Created new shared memory: {self.name}")
+            self._write_data({"status": "Not Ready", "timestamp": time.time(), "objects": {}})
+        except FileExistsError:
+            self.shm = shared_memory.SharedMemory(name=self.name, create=False)
+            print(f"[INFO] Attached to existing shared memory: {self.name}")
+
+    def _write_data(self, data):
+        """Write data to shared memory as JSON."""
+        try:
+            json_str = json.dumps(data)
+            json_bytes = json_str.encode('utf-8')
+
+            if len(json_bytes) > self.size - 4:
+                print(f"[WARNING] Data too large for shared memory ({len(json_bytes)} > {self.size-4})")
+                return False
+
+            self.shm.buf[:4] = struct.pack('I', len(json_bytes))
+            self.shm.buf[4:4+len(json_bytes)] = json_bytes
+            return True
+        except Exception as e:
+            print(f"[ERROR] Failed to write to shared memory: {e}")
+            return False
+
+    def update_status(self, status):
+        """Update only the status field."""
+        data = self._read_data()
+        data["status"] = status
+        data["timestamp"] = time.time()
+        self._write_data(data)
+
+    def update_object(self, object_id, x, y, angle, width, height):
+        """Update a single object's data."""
+        data = self._read_data()
+        if "objects" not in data:
+            data["objects"] = {}
+        data["objects"][str(object_id)] = {
+            "x": float(round(x, 1)),
+            "y": float(round(y, 1)),
+            "angle": float(round(angle, 1)),
+            "width": float(round(width, 1)),
+            "height": float(round(height, 1))
+        }
+        data["timestamp"] = time.time()
+        self._write_data(data)
+
+    def clear_object(self, object_id):
+        """Remove an object from shared memory."""
+        data = self._read_data()
+        if str(object_id) in data["objects"]:
+            del data["objects"][str(object_id)]
+            data["timestamp"] = time.time()
+            self._write_data(data)
+
+    def clear_all_objects(self):
+        """Clear all objects."""
+        data = self._read_data()
+        data["objects"] = {}
+        data["timestamp"] = time.time()
+        self._write_data(data)
+
+    def _read_data(self):
+        """Read data from shared memory."""
+        try:
+            length = struct.unpack('I', bytes(self.shm.buf[:4]))[0]
+            if length == 0 or length > self.size - 4:
+                return {"status": "Not Ready", "timestamp": time.time(), "objects": {}}
+
+            json_bytes = bytes(self.shm.buf[4:4+length])
+            json_str = json_bytes.decode('utf-8')
+            data = json.loads(json_str)
+
+            if "objects" not in data:
+                data["objects"] = {}
+
+            return data
+        except Exception as e:
+            print(f"[ERROR] Failed to read from shared memory: {e}")
+            return {"status": "Not Ready", "timestamp": time.time(), "objects": {}}
+
+    def get_data(self):
+        """Public method to read current data."""
+        return self._read_data()
+
+    def cleanup(self):
+        """Close and unlink shared memory."""
+        if self.shm:
+            try:
+                self.shm.close()
+                self.shm.unlink()
+                print(f"[INFO] Shared memory cleaned up: {self.name}")
+            except Exception as e:
+                print(f"[ERROR] Failed to cleanup shared memory: {e}")
+
+
 class RobotVisionGUI(QMainWindow):
     """Main GUI application for robot vision system"""
 
@@ -118,8 +225,15 @@ class RobotVisionGUI(QMainWindow):
         self.inspection_box_object_data = None  # Store object data for reference
 
         # Shared memory
+        self.detection_shm = None  # DetectionData shared memory manager
         self.click_shm = None
         self.inspect_shm = None
+
+        # Detection status tracking (for shared memory updates)
+        self.last_saved_status = None
+        self.last_saved_objects = {}
+        self.last_outputs = {}  # Track last output for each object
+        self.last_change_time = {}  # Track last change time for each object
 
         # YOLO model
         model_path = self.config.get("yolo_model_path", "best.pt")
@@ -824,6 +938,23 @@ class RobotVisionGUI(QMainWindow):
                         'height': height_mm
                     })
 
+                    # Track changes for shared memory updates (like yolo-mouse-v2.py)
+                    current_time = time.time()
+                    prev = self.last_outputs.get(i, (None, None, None, None, None))
+                    if (
+                        prev[0] is None or
+                        abs(prev[0] - x_mm) >= 2.0 or
+                        abs(prev[1] - y_mm) >= 2.0 or
+                        abs(prev[2] - angle_deg) >= 2.0 or
+                        abs(prev[3] - width_mm) >= 2.0 or
+                        abs(prev[4] - height_mm) >= 2.0
+                    ):
+                        self.last_outputs[i] = (x_mm, y_mm, angle_deg, width_mm, height_mm)
+                        self.last_change_time[i] = current_time
+                        # Write to shared memory immediately when object changes
+                        if self.detection_shm:
+                            self.detection_shm.update_object(i, x_mm, y_mm, angle_deg, width_mm, height_mm)
+
                     # Draw center point
                     center_img = np.mean(corners, axis=0).astype(int)
                     cv2.circle(annotated, tuple(center_img), 5, (0, 0, 255), -1)
@@ -842,6 +973,66 @@ class RobotVisionGUI(QMainWindow):
             label_pos = tuple(corners_int[0] - [0, 10])
             cv2.putText(annotated, f"Object {i}", label_pos,
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2, cv2.LINE_AA)
+
+        # Status tracking and shared memory updates (like yolo-mouse-v2.py lines 987-1020)
+        if self.detection_shm:
+            current_time = time.time()
+            detected_ids = set([obj['id'] for obj in self.detected_objects])
+
+            # Calculate status
+            if len(detected_ids) <= 1:
+                status_text = "Not Ready"
+            elif len(detected_ids) >= 2 and all(current_time - self.last_change_time.get(obj_id, 0) >= 1.0 for obj_id in detected_ids):
+                status_text = "Ready"
+            else:
+                status_text = "Detect"
+
+            # Update shared memory status
+            if status_text == "Ready":
+                if status_text != self.last_saved_status:
+                    self.detection_shm.update_status(status_text)
+                    self.last_saved_status = status_text
+
+                # Update all detected objects in shared memory
+                for obj in self.detected_objects:
+                    obj_id = obj['id']
+                    prev_obj = self.last_saved_objects.get(obj_id)
+                    curr_obj = (obj['x_mm'], obj['y_mm'], obj['angle'], obj['width'], obj['height'])
+                    if prev_obj != curr_obj:
+                        self.detection_shm.update_object(obj_id, obj['x_mm'], obj['y_mm'], obj['angle'], obj['width'], obj['height'])
+                        self.last_saved_objects[obj_id] = curr_obj
+
+            elif status_text == "Not Ready":
+                if status_text != self.last_saved_status:
+                    self.detection_shm.update_status(status_text)
+                    self.last_saved_status = status_text
+
+                self.detection_shm.clear_all_objects()
+                self.last_saved_objects.clear()
+
+            else:  # Detect
+                if status_text != self.last_saved_status:
+                    self.detection_shm.update_status(status_text)
+                    self.last_saved_status = status_text
+
+            # Draw status on frame
+            if status_text == "Not Ready":
+                status_color = (0, 100, 200)
+            elif status_text == "Detect":
+                status_color = (200, 150, 0)
+            elif status_text == "Ready":
+                status_color = (0, 150, 0)
+
+            cv2.putText(
+                annotated,
+                f"Status: {status_text}",
+                (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1.0,
+                status_color,
+                2,
+                cv2.LINE_AA
+            )
 
         # Draw info panel if object is selected
         if self.show_info_panel and self.selected_object:
@@ -1224,6 +1415,10 @@ class RobotVisionGUI(QMainWindow):
     def initialize_shared_memory(self):
         """Initialize shared memory for communication with xarm-motion"""
         try:
+            # Detection data shared memory (writes detection results for xarm-motion)
+            self.detection_shm = SharedMemoryManager(name="DetectionData", size=4096)
+            print("[SharedMemory] DetectionData initialized (writing mode)")
+
             # Click data shared memory
             try:
                 self.click_shm = shared_memory.SharedMemory(name="ClickData", create=True, size=512)
@@ -1244,6 +1439,8 @@ class RobotVisionGUI(QMainWindow):
     def cleanup_shared_memory(self):
         """Cleanup shared memory"""
         try:
+            if self.detection_shm:
+                self.detection_shm.cleanup()
             if self.click_shm:
                 self.click_shm.close()
             if self.inspect_shm:
