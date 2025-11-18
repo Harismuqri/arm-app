@@ -1695,6 +1695,7 @@ class RobotVisionGUI(QMainWindow):
                 if self.inspection_box_angle < 0:
                     self.inspection_box_angle += 360
                 print(f"[GUI] Inspection box angle: {self.inspection_box_angle:.1f}°")
+                event.accept()  # Consume event to prevent tab navigation
 
             elif event.key() == Qt.Key.Key_Right:
                 # Rotate clockwise (increase angle)
@@ -1702,11 +1703,16 @@ class RobotVisionGUI(QMainWindow):
                 if self.inspection_box_angle >= 360:
                     self.inspection_box_angle -= 360
                 print(f"[GUI] Inspection box angle: {self.inspection_box_angle:.1f}°")
+                event.accept()  # Consume event to prevent tab navigation
 
             elif event.key() == Qt.Key.Key_Escape:
                 # Close inspection box
                 self.inspection_box_visible = False
                 print("[GUI] Inspection box closed (ESC)")
+                event.accept()  # Consume event
+            else:
+                # Pass other events to parent
+                super().keyPressEvent(event)
         else:
             # Pass event to parent if inspection box not visible
             super().keyPressEvent(event)
