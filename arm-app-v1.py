@@ -420,6 +420,8 @@ class RobotVisionGUI(QMainWindow):
 
         # Shared memory managers
         self.detection_data_mgr = None  # DetectionData shared memory manager (INFO ONLY - no control)
+        self.click_data_mgr = None  # ClickData manager (initialized but not used for robot control)
+        self.inspect_data_mgr = None  # InspectData manager (initialized but not used for robot control)
 
         # Detection status tracking (for shared memory updates)
         self.last_saved_status = None
@@ -1365,8 +1367,15 @@ class RobotVisionGUI(QMainWindow):
                 self.selected_object = obj_data
                 self.show_info_panel = True
                 clicked_on_object = True
-                print(f"[GUI INFO] Object {obj_data['id']}: ({obj_data['x_mm']:.1f}, {obj_data['y_mm']:.1f}) mm")
-                print(f"[GUI INFO] INFO ONLY MODE - No control commands sent")
+                print(f"[GUI CLICK] Object {obj_data['id']}: ({obj_data['x_mm']:.1f}, {obj_data['y_mm']:.1f}) mm")
+
+                # Display click data WITHOUT sending to robot
+                if self.click_data_mgr and self.H_camera_to_workspace is not None:
+                    print(f"[CLICK INFO] Position: ({obj_data['x_mm']:.1f}, {obj_data['y_mm']:.1f}) mm")
+                    print(f"[CLICK INFO] Angle: {obj_data['angle']:.1f}°")
+                    print(f"[CLICK INFO] Size: {obj_data['width']:.1f}x{obj_data['height']:.1f} mm")
+                    print(f"[CLICK INFO] INFO ONLY - Not sending command to robot")
+                    # NOTE: write_click() is NOT called - no robot control
 
                 # Update detection info text
                 info_text = f"Selected Object {obj_data['id']}:\n"
@@ -1408,13 +1417,23 @@ class RobotVisionGUI(QMainWindow):
                 self.inspection_box_angle = obj_data['angle']  # Start with object's angle
                 self.inspection_box_object_data = obj_data
 
-                print(f"[GUI INFO] Inspection box opened for Object {obj_data['id']}")
-                print(f"[GUI INFO] Object size: {obj_data['width']:.1f}x{obj_data['height']:.1f} mm")
-                print(f"[GUI INFO] Box size: {self.inspection_box_width}x{self.inspection_box_height} pixels")
-                print(f"[GUI INFO] Initial angle: {self.inspection_box_angle:.1f}°")
-                print(f"[GUI INFO] Position: ({x}, {y})")
-                print(f"[GUI INFO] INFO ONLY MODE - No inspection commands sent")
-                print(f"[GUI INFO] Use ← → arrows to rotate, ESC or click outside to close")
+                # Display inspection data WITHOUT sending to robot
+                if self.inspect_data_mgr and self.H_camera_to_workspace is not None:
+                    # Calculate target position for display purposes
+                    click_pt = np.array([[x, y]], dtype=np.float32).reshape(-1, 1, 2)
+                    workspace_coord = cv2.perspectiveTransform(click_pt, self.H_camera_to_workspace).reshape(-1, 2)
+                    target_x_mm = workspace_coord[0][0]
+                    target_y_mm = workspace_coord[0][1]
+
+                    print(f"[INSPECT INFO] Object {obj_data['id']} selected for inspection")
+                    print(f"[INSPECT INFO] Target position: ({target_x_mm:.1f}, {target_y_mm:.1f}) mm")
+                    print(f"[INSPECT INFO] Object angle: {obj_data['angle']:.1f}°")
+                    print(f"[INSPECT INFO] Object size: {obj_data['width']:.1f}x{obj_data['height']:.1f} mm")
+                    print(f"[INSPECT INFO] INFO ONLY - Not sending command to robot")
+                    # NOTE: write_inspect_command() is NOT called - no robot control
+
+                print(f"[GUI] Inspection box visualization opened")
+                print(f"[GUI] Use ← → arrows to rotate, ESC or click outside to close")
                 break
 
     def get_rotated_box_points(self, cx, cy, width, height, angle):
@@ -1609,9 +1628,14 @@ class RobotVisionGUI(QMainWindow):
     def initialize_shared_memory(self):
         """Initialize shared memory for communication with xarm-motion (INFO ONLY MODE)"""
         try:
-            # Detection data shared memory (writes detection results for xarm-motion)
+            # Detection data shared memory (writes detection results for monitoring)
             self.detection_data_mgr = DetectionDataManager(name="DetectionData", size=4096)
             print("[SharedMemory] DetectionData initialized (INFO ONLY - no control)")
+
+            # Click and Inspect managers (initialized but commands are NOT sent to robot)
+            self.click_data_mgr = ClickDataManager(name="ClickData", size=512)
+            self.inspect_data_mgr = InspectDataManager(name="InspectData", size=512)
+            print("[SharedMemory] ClickData and InspectData initialized (INFO display only)")
 
         except Exception as e:
             print(f"[SharedMemory] Error: {e}")
@@ -1621,7 +1645,11 @@ class RobotVisionGUI(QMainWindow):
         try:
             if self.detection_data_mgr:
                 self.detection_data_mgr.cleanup()
-            print("[SharedMemory] DetectionData shared memory cleaned up")
+            if self.click_data_mgr:
+                self.click_data_mgr.cleanup()
+            if self.inspect_data_mgr:
+                self.inspect_data_mgr.cleanup()
+            print("[SharedMemory] All shared memory cleaned up")
         except:
             pass
 
