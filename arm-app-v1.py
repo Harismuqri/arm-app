@@ -358,7 +358,7 @@ class RobotVisionGUI(QMainWindow):
         
         self.detection_label = ClickableLabel()  # Use ClickableLabel for click detection
         self.detection_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.detection_label.setFixedSize(640, 480)  # Fixed size in normal mode
+        self.detection_label.setFixedSize(640, 480)  # Fixed size - won't expand
         self.detection_label.setStyleSheet("border: 2px solid black; background-color: #2b2b2b;")
         self.detection_label.clicked.connect(self.on_detection_click)  # Connect single click
         self.detection_label.doubleClicked.connect(self.on_detection_double_click)  # Connect double click
@@ -1317,11 +1317,10 @@ class RobotVisionGUI(QMainWindow):
                 # When window is MAXIMIZED (shows restore icon ⧉) - use BIGGER fixed size (850x720)
                 self.detection_label.setFixedSize(850, 720)
             else:
-                # When window is RESTORED/Normal (shows maximize icon ⬜) - use fixed size (640x480)
-                self.detection_label.setFixedSize(640, 480)
-
-                # Resize window back to 900x850 when restored
+                # When window is RESTORED/Normal (shows maximize icon ⬜)
+                # Resize window FIRST, then set label to fixed smaller size
                 self.resize(900, 850)
+                self.detection_label.setFixedSize(640, 480)
 
         super().changeEvent(event)
 
