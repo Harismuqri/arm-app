@@ -189,6 +189,200 @@ class SharedMemoryManager:
                 print(f"[ERROR] Failed to cleanup shared memory: {e}")
 
 
+class ClickDataManager:
+    """Manages shared memory for mouse click data (sends click commands to xarm-motion)"""
+
+    def __init__(self, name="ClickData", size=512):
+        self.name = name
+        self.size = size
+        self.shm = None
+        self._initialize_shared_memory()
+
+    def _initialize_shared_memory(self):
+        """Create or attach to existing shared memory."""
+        try:
+            self.shm = shared_memory.SharedMemory(name=self.name, create=False)
+            print(f"[INFO] Attached to existing click data shared memory: {self.name}")
+            existing_data = self._read_data()
+            print(f"[DEBUG] Found existing click data: {existing_data}")
+        except FileNotFoundError:
+            try:
+                self.shm = shared_memory.SharedMemory(name=self.name, create=True, size=self.size)
+                print(f"[INFO] Created click data shared memory: {self.name}")
+                self._write_data({"click_x": 0, "click_y": 0, "timestamp": 0, "processed": True, "button": "none", "angle": 0.0})
+            except Exception as e:
+                print(f"[ERROR] Failed to create shared memory: {e}")
+                raise
+
+    def _write_data(self, data):
+        """Write data to shared memory as JSON."""
+        try:
+            json_str = json.dumps(data)
+            json_bytes = json_str.encode('utf-8')
+
+            if len(json_bytes) > self.size - 4:
+                print(f"[ERROR] Data too large: {len(json_bytes)} > {self.size-4}")
+                return False
+
+            self.shm.buf[:4] = struct.pack('I', len(json_bytes))
+            self.shm.buf[4:4+len(json_bytes)] = json_bytes
+
+            print(f"[DEBUG] Wrote {len(json_bytes)} bytes to shared memory '{self.name}'")
+            return True
+        except Exception as e:
+            print(f"[ERROR] Failed to write click data: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+
+    def _read_data(self):
+        """Read data from shared memory."""
+        try:
+            length = struct.unpack('I', bytes(self.shm.buf[:4]))[0]
+            if length == 0 or length > self.size - 4:
+                return {"click_x": 0, "click_y": 0, "timestamp": 0, "processed": True, "button": "none", "angle": 0.0, "width": 0.0, "height": 0.0}
+
+            json_bytes = bytes(self.shm.buf[4:4+length])
+            json_str = json_bytes.decode('utf-8')
+            data = json.loads(json_str)
+
+            if "button" not in data:
+                data["button"] = "left"
+            if "angle" not in data:
+                data["angle"] = 0.0
+            if "width" not in data:
+                data["width"] = 0.0
+            if "height" not in data:
+                data["height"] = 0.0
+
+            return data
+        except Exception as e:
+            print(f"[ERROR] Failed to read click data: {e}")
+            return {"click_x": 0, "click_y": 0, "timestamp": 0, "processed": True, "button": "none", "angle": 0.0, "width": 0.0, "height": 0.0}
+
+    def write_click(self, x, y, button="left", angle=0.0, width=0.0, height=0.0):
+        """Write a new click position with button type, object angle, and dimensions."""
+        data = {
+            "click_x": float(x),
+            "click_y": float(y),
+            "button": button,
+            "angle": float(angle),
+            "width": float(width),
+            "height": float(height),
+            "timestamp": time.time(),
+            "processed": False
+        }
+        self._write_data(data)
+        button_action = {"left": "MOVE", "middle": "UNUSED", "right": "PICK/PLACE"}
+        print(f"[CLICK-{button_action.get(button, button).upper()}] Sent to robot: ({x:.1f}, {y:.1f}) mm, Angle: {angle:.1f}°, Size: {width:.1f}x{height:.1f}mm")
+
+    def cleanup(self):
+        """Close and unlink shared memory."""
+        if self.shm:
+            try:
+                self.shm.close()
+                self.shm.unlink()
+                print(f"[INFO] Click data shared memory cleaned up: {self.name}")
+            except Exception as e:
+                print(f"[ERROR] Failed to cleanup: {e}")
+
+
+class InspectDataManager:
+    """Manages shared memory for inspection commands (sends inspection requests to xarm-motion)"""
+
+    def __init__(self, name="InspectData", size=512):
+        self.name = name
+        self.size = size
+        self.shm = None
+        self._initialize_shared_memory()
+
+    def _initialize_shared_memory(self):
+        """Create or attach to existing shared memory."""
+        try:
+            self.shm = shared_memory.SharedMemory(name=self.name, create=False)
+            print(f"[INFO] Attached to existing inspect data shared memory: {self.name}")
+        except FileNotFoundError:
+            try:
+                self.shm = shared_memory.SharedMemory(name=self.name, create=True, size=self.size)
+                print(f"[INFO] Created inspect data shared memory: {self.name}")
+                # Get camera offset from config
+                camera_offset = self.get_camera_offset_from_config()
+                self._write_data({
+                    "inspect": False,
+                    "target_x": 0,
+                    "target_y": 0,
+                    "angle": 0.0,
+                    "offset_x": camera_offset.get("offset_x", 7.0),
+                    "offset_y": camera_offset.get("offset_y", 92.9),
+                    "timestamp": 0,
+                    "processed": True
+                })
+            except Exception as e:
+                print(f"[ERROR] Failed to create inspect shared memory: {e}")
+                raise
+
+    def get_camera_offset_from_config(self):
+        """Get camera offset from config.json"""
+        try:
+            if not os.path.isabs("config.json"):
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+                config_path = os.path.join(base_dir, "config.json")
+            else:
+                config_path = "config.json"
+
+            with open(config_path, "r") as f:
+                config = json.load(f)
+                return config.get("camera_offset", {"offset_x": 7.0, "offset_y": 92.9, "offset_error": 0.0})
+        except:
+            return {"offset_x": 7.0, "offset_y": 92.9, "offset_error": 0.0}
+
+    def _write_data(self, data):
+        """Write data to shared memory as JSON."""
+        try:
+            json_str = json.dumps(data)
+            json_bytes = json_str.encode('utf-8')
+
+            if len(json_bytes) > self.size - 4:
+                return False
+
+            self.shm.buf[:4] = struct.pack('I', len(json_bytes))
+            self.shm.buf[4:4+len(json_bytes)] = json_bytes
+            return True
+        except Exception as e:
+            print(f"[ERROR] Failed to write inspect data: {e}")
+            return False
+
+    def write_inspect_command(self, target_x, target_y, angle=0.0, width=0.0, height=0.0):
+        """Send inspection command with target position and object angle."""
+        camera_offset = self.get_camera_offset_from_config()
+        data = {
+            "inspect": True,
+            "target_x": float(target_x),
+            "target_y": float(target_y),
+            "angle": float(angle),
+            "width": float(width),
+            "height": float(height),
+            "offset_x": camera_offset.get("offset_x", 7.0),
+            "offset_y": camera_offset.get("offset_y", 92.9),
+            "offset_error": camera_offset.get("offset_error", 0.0),
+            "timestamp": time.time(),
+            "processed": False
+        }
+        self._write_data(data)
+        print(f"[INSPECT] Inspection command sent: Target ({target_x:.1f}, {target_y:.1f}) mm - Angle: {angle:.1f}°")
+        print(f"[INSPECT] Camera offset: ({camera_offset.get('offset_x', 7.0):.1f}, {camera_offset.get('offset_y', 92.9):.1f}) ± {camera_offset.get('offset_error', 0.0):.1f} mm")
+
+    def cleanup(self):
+        """Close and unlink shared memory."""
+        if self.shm:
+            try:
+                self.shm.close()
+                self.shm.unlink()
+                print(f"[INFO] Inspect data shared memory cleaned up: {self.name}")
+            except Exception as e:
+                print(f"[ERROR] Failed to cleanup: {e}")
+
+
 class RobotVisionGUI(QMainWindow):
     """Main GUI application for robot vision system"""
 
@@ -1175,6 +1369,27 @@ class RobotVisionGUI(QMainWindow):
                 clicked_on_object = True
                 print(f"[GUI CLICK] Object {obj_data['id']}: ({obj_data['x_mm']:.1f}, {obj_data['y_mm']:.1f}) mm")
 
+                # Send click data to xarm-motion via shared memory
+                if self.click_shm:
+                    # Transform click to workspace coordinates if calibration is available
+                    if self.H_camera_to_workspace is not None:
+                        click_pt = np.array([[x, y]], dtype=np.float32).reshape(-1, 1, 2)
+                        workspace_coord = cv2.perspectiveTransform(click_pt, self.H_camera_to_workspace).reshape(-1, 2)
+                        click_x_mm = workspace_coord[0][0]
+                        click_y_mm = workspace_coord[0][1]
+
+                        # Send object center position with angle and dimensions
+                        self.click_shm.write_click(
+                            obj_data['x_mm'],  # Use object center, not click position
+                            obj_data['y_mm'],
+                            button="left",  # Default to left click (MOVE)
+                            angle=obj_data['angle'],
+                            width=obj_data['width'],
+                            height=obj_data['height']
+                        )
+                    else:
+                        print("[WARNING] No calibration available - cannot send click data")
+
                 # Update detection info text
                 info_text = f"Selected Object {obj_data['id']}:\n"
                 info_text += f"Position: ({obj_data['x_mm']:.1f}, {obj_data['y_mm']:.1f}) mm\n"
@@ -1214,6 +1429,26 @@ class RobotVisionGUI(QMainWindow):
                 self.inspection_box_height = int(box_height_px)
                 self.inspection_box_angle = obj_data['angle']  # Start with object's angle
                 self.inspection_box_object_data = obj_data
+
+                # Send inspection command to xarm-motion via shared memory
+                if self.inspect_shm:
+                    if self.H_camera_to_workspace is not None:
+                        # Transform click position to workspace coordinates
+                        click_pt = np.array([[x, y]], dtype=np.float32).reshape(-1, 1, 2)
+                        workspace_coord = cv2.perspectiveTransform(click_pt, self.H_camera_to_workspace).reshape(-1, 2)
+                        target_x_mm = workspace_coord[0][0]
+                        target_y_mm = workspace_coord[0][1]
+
+                        # Send inspection command with clicked position (not object center)
+                        self.inspect_shm.write_inspect_command(
+                            target_x_mm,  # Use clicked position for inspection
+                            target_y_mm,
+                            angle=obj_data['angle'],
+                            width=obj_data['width'],
+                            height=obj_data['height']
+                        )
+                    else:
+                        print("[WARNING] No calibration available - cannot send inspection command")
 
                 print(f"[GUI] Inspection box opened for Object {obj_data['id']}")
                 print(f"[GUI] Object size: {obj_data['width']:.1f}x{obj_data['height']:.1f} mm")
@@ -1419,19 +1654,15 @@ class RobotVisionGUI(QMainWindow):
             self.detection_shm = SharedMemoryManager(name="DetectionData", size=4096)
             print("[SharedMemory] DetectionData initialized (writing mode)")
 
-            # Click data shared memory
-            try:
-                self.click_shm = shared_memory.SharedMemory(name="ClickData", create=True, size=512)
-            except FileExistsError:
-                self.click_shm = shared_memory.SharedMemory(name="ClickData")
+            # Click data shared memory (writes click commands for xarm-motion)
+            self.click_shm = ClickDataManager(name="ClickData", size=512)
+            print("[SharedMemory] ClickData initialized (writing mode)")
 
-            # Inspect data shared memory
-            try:
-                self.inspect_shm = shared_memory.SharedMemory(name="InspectData", create=True, size=512)
-            except FileExistsError:
-                self.inspect_shm = shared_memory.SharedMemory(name="InspectData")
+            # Inspect data shared memory (writes inspection commands for xarm-motion)
+            self.inspect_shm = InspectDataManager(name="InspectData", size=512)
+            print("[SharedMemory] InspectData initialized (writing mode)")
 
-            print("[SharedMemory] Initialized")
+            print("[SharedMemory] All shared memory initialized")
 
         except Exception as e:
             print(f"[SharedMemory] Error: {e}")
@@ -1442,10 +1673,10 @@ class RobotVisionGUI(QMainWindow):
             if self.detection_shm:
                 self.detection_shm.cleanup()
             if self.click_shm:
-                self.click_shm.close()
+                self.click_shm.cleanup()
             if self.inspect_shm:
-                self.inspect_shm.close()
-            print("[SharedMemory] Cleaned up")
+                self.inspect_shm.cleanup()
+            print("[SharedMemory] All shared memory cleaned up")
         except:
             pass
 
