@@ -1,5 +1,5 @@
 {
-    "_comment_robot": "=== Robot Controller Settings (xarm-motion) ===",
+    "_comment_robot": "=== Robot Controller Settings (xarm-motion-v1.7.py) ===",
     "robot_ip": "192.168.1.151",
     "tcp_speed": 300,
     "tcp_acc": 1000,

@@ -661,7 +661,7 @@ class RobotVisionGUI(QMainWindow):
         detection_container = QVBoxLayout()
         detection_title = QLabel("Detection Camera")
         detection_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        detection_title.setStyleSheet("font-weight: bold; font-size: 14px;")
+        detection_title.setStyleSheet("font-weight: bold; font-size: 30px;")
         detection_container.addWidget(detection_title)
 
         self.detection_label = ClickableLabel()  # Use ClickableLabel for click detection
