@@ -1389,8 +1389,36 @@ class RobotVisionGUI(QMainWindow):
         if not clicked_on_object:
             self.selected_object = None
             self.show_info_panel = False
-            self.detection_info.clear()
-            print(f"[GUI CLICK] Empty space at pixel ({x}, {y})")
+
+            # Convert click position to workspace coordinates and display
+            if self.H_camera_to_workspace is not None:
+                click_pt = np.array([[x, y]], dtype=np.float32).reshape(-1, 1, 2)
+                workspace_coord = cv2.perspectiveTransform(click_pt, self.H_camera_to_workspace).reshape(-1, 2)
+                click_x_mm = workspace_coord[0][0]
+                click_y_mm = workspace_coord[0][1]
+
+                # Check if inside workspace
+                workspace_width = self.config.get("workspace", {}).get("width", 300)
+                workspace_height = self.config.get("workspace", {}).get("height", 300)
+
+                if 0 <= click_x_mm <= workspace_width and 0 <= click_y_mm <= workspace_height:
+                    print(f"[GUI CLICK] Empty space at pixel ({x}, {y})")
+                    print(f"[CLICK INFO] Workspace position: ({click_x_mm:.1f}, {click_y_mm:.1f}) mm")
+                    print(f"[CLICK INFO] INFO ONLY - Not sending command to robot")
+
+                    # Update detection info text
+                    info_text = f"Clicked Position:\n"
+                    info_text += f"Workspace: ({click_x_mm:.1f}, {click_y_mm:.1f}) mm\n"
+                    info_text += f"Pixel: ({x}, {y})"
+                    self.detection_info.setText(info_text)
+                else:
+                    print(f"[GUI CLICK] Empty space at pixel ({x}, {y})")
+                    print(f"[WARNING] Click outside workspace: ({click_x_mm:.1f}, {click_y_mm:.1f}) mm")
+                    self.detection_info.clear()
+            else:
+                print(f"[GUI CLICK] Empty space at pixel ({x}, {y})")
+                print(f"[WARNING] No calibration available")
+                self.detection_info.clear()
 
     def on_detection_double_click(self, x, y):
         """Handle double-click on detection camera - show inspection visualization box"""
