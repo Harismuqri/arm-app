@@ -13,10 +13,10 @@ import os
 from multiprocessing import shared_memory
 import struct
 import time
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                              QHBoxLayout, QTabWidget, QLabel, QLineEdit, 
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
+                              QHBoxLayout, QTabWidget, QLabel, QLineEdit,
                               QPushButton, QGroupBox, QGridLayout, QTextEdit,
-                              QCheckBox, QComboBox, QMessageBox)
+                              QCheckBox, QComboBox, QMessageBox, QSizePolicy)
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap, QFont
 from ultralytics import YOLO
@@ -359,9 +359,14 @@ class RobotVisionGUI(QMainWindow):
         self.detection_label = ClickableLabel()  # Use ClickableLabel for click detection
         self.detection_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.detection_label.setMinimumSize(640, 480)  # Minimum size
+        self.detection_label.setScaledContents(False)  # Maintain aspect ratio
         self.detection_label.setStyleSheet("border: 2px solid black; background-color: #2b2b2b;")
         self.detection_label.clicked.connect(self.on_detection_click)  # Connect single click
         self.detection_label.doubleClicked.connect(self.on_detection_double_click)  # Connect double click
+
+        # Set size policy to allow expansion while maintaining minimum size
+        self.detection_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
         detection_container.addWidget(self.detection_label)
         
         camera_container.addLayout(detection_container)
@@ -1314,16 +1319,16 @@ class RobotVisionGUI(QMainWindow):
         """Handle window state changes (maximize/restore)"""
         if event.type() == event.Type.WindowStateChange:
             if self.windowState() & Qt.WindowState.WindowMaximized:
-                # When window is MAXIMIZED (shows restore icon ⧉) - use BIGGER size (850x720)
+                # When window is MAXIMIZED (shows restore icon ⧉) - use BIGGER fixed size (850x720)
                 self.detection_label.setFixedSize(850, 720)
             else:
-                # When window is RESTORED/Normal (shows maximize icon ⬜) - use SMALLER size (640x480)
+                # When window is RESTORED/Normal (shows maximize icon ⬜) - allow auto-resize
                 self.detection_label.setMinimumSize(640, 480)
-                self.detection_label.setFixedSize(640, 480)
-                
+                self.detection_label.setMaximumSize(16777215, 16777215)  # Remove fixed size constraint
+
                 # Resize window back to 900x850 when restored
                 self.resize(900, 850)
-        
+
         super().changeEvent(event)
 
 
