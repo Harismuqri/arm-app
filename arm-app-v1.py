@@ -82,7 +82,7 @@ class ClickableLabel(QLabel):
                 self.doubleClicked.emit(widget_x, widget_y)
 
 
-class SharedMemoryManager:
+class DetectionDataManager:
     """Manages shared memory for detection data (writes object detections for xarm-motion to read)"""
 
     def __init__(self, name="DetectionData", size=4096):
@@ -1651,7 +1651,7 @@ class RobotVisionGUI(QMainWindow):
         """Initialize shared memory for communication with xarm-motion"""
         try:
             # Detection data shared memory (writes detection results for xarm-motion)
-            self.detection_shm = SharedMemoryManager(name="DetectionData", size=4096)
+            self.detection_shm = DetectionDataManager(name="DetectionData", size=4096)
             print("[SharedMemory] DetectionData initialized (writing mode)")
 
             # Click data shared memory (writes click commands for xarm-motion)
