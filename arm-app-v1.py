@@ -538,7 +538,7 @@ class RobotVisionGUI(QMainWindow):
         detection_layout.addWidget(auto_cal_btn)
 
         # Manual calibration option
-        manual_detection_label = QLabel("Manual Backup (4 corners in pixels → workspace mm):")
+        manual_detection_label = QLabel("Manual Calibration (4 corners in pixels → workspace mm):")
         detection_layout.addWidget(manual_detection_label)
 
         self.detection_cal_inputs = {}
@@ -586,7 +586,7 @@ class RobotVisionGUI(QMainWindow):
 
         detection_layout.addLayout(grid_layout)
 
-        manual_detection_btn = QPushButton("Apply Manual Detection Calibration")
+        manual_detection_btn = QPushButton("Manual Detection Calibration")
         manual_detection_btn.clicked.connect(self.apply_manual_detection_calibration)
         detection_layout.addWidget(manual_detection_btn)
 
@@ -601,7 +601,7 @@ class RobotVisionGUI(QMainWindow):
         auto_robot_label = QLabel("Auto Mode - Enter 2 corners (BL and TR):")
         robot_layout.addWidget(auto_robot_label)
 
-        self.robot_auto_mode = QCheckBox("Use Auto Calculation (enter only BL and TR)")
+        self.robot_auto_mode = QCheckBox("Auto Calculation (enter only BL and TR)")
         self.robot_auto_mode.setChecked(True)
         self.robot_auto_mode.stateChanged.connect(self.toggle_robot_calibration_mode)
         robot_layout.addWidget(self.robot_auto_mode)
