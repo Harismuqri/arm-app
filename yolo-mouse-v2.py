@@ -251,7 +251,7 @@ def draw_inspection_crosshair(frame, x, y, offset_error=CAMERA_OFFSET_ERROR):
         y2 = int(y + error_radius_px * np.sin(angle_rad + np.radians(15)))
         cv2.line(frame, (x1, y1), (x2, y2), (0, 255, 255), 1)
 
-class SharedMemoryManager:
+class DetectionDataManager:
     """Manages shared memory for detection data."""
 
     def __init__(self, name=SHARED_MEMORY_NAME, size=SHARED_MEMORY_SIZE):
@@ -626,7 +626,7 @@ def auto_calibrate_homography(frame):
 def main():
     global mouse_clicked, mouse_x, mouse_y, selected_object, show_coordinates, inspection_mode
 
-    detection_data_mgr = SharedMemoryManager()
+    detection_data_mgr = DetectionDataManager()
     click_data_mgr = ClickDataManager()
     inspect_data_mgr = InspectDataManager()
 
