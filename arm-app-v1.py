@@ -43,16 +43,31 @@ class ClickableLabel(QLabel):
 
             # Scale coordinates to match original image size
             if self.original_image_size and self.displayed_image_size:
-                # Calculate scaling factors
-                scale_x = self.original_image_size[0] / self.displayed_image_size[0]
-                scale_y = self.original_image_size[1] / self.displayed_image_size[1]
+                # Calculate image offset (image is centered in label)
+                label_w = self.width()
+                label_h = self.height()
+                img_w = self.displayed_image_size[0]
+                img_h = self.displayed_image_size[1]
 
-                # Scale click coordinates
-                img_x = int(widget_x * scale_x)
-                img_y = int(widget_y * scale_y)
+                offset_x = (label_w - img_w) / 2
+                offset_y = (label_h - img_h) / 2
 
-                # Emit signal with scaled coordinates
-                self.clicked.emit(img_x, img_y)
+                # Adjust click position by offset
+                img_click_x = widget_x - offset_x
+                img_click_y = widget_y - offset_y
+
+                # Check if click is within image bounds
+                if 0 <= img_click_x < img_w and 0 <= img_click_y < img_h:
+                    # Calculate scaling factors
+                    scale_x = self.original_image_size[0] / self.displayed_image_size[0]
+                    scale_y = self.original_image_size[1] / self.displayed_image_size[1]
+
+                    # Scale click coordinates to original image size
+                    orig_x = int(img_click_x * scale_x)
+                    orig_y = int(img_click_y * scale_y)
+
+                    # Emit signal with scaled coordinates
+                    self.clicked.emit(orig_x, orig_y)
             else:
                 # No scaling info, emit raw coordinates
                 self.clicked.emit(widget_x, widget_y)
@@ -67,19 +82,31 @@ class ClickableLabel(QLabel):
 
             # Scale coordinates to match original image size
             if self.original_image_size and self.displayed_image_size:
-                # Calculate scaling factors
-                scale_x = self.original_image_size[0] / self.displayed_image_size[0]
-                scale_y = self.original_image_size[1] / self.displayed_image_size[1]
+                # Calculate image offset (image is centered in label)
+                label_w = self.width()
+                label_h = self.height()
+                img_w = self.displayed_image_size[0]
+                img_h = self.displayed_image_size[1]
 
-                # Scale click coordinates
-                img_x = int(widget_x * scale_x)
-                img_y = int(widget_y * scale_y)
+                offset_x = (label_w - img_w) / 2
+                offset_y = (label_h - img_h) / 2
 
-                # Emit double-click signal
-                self.doubleClicked.emit(img_x, img_y)
-            else:
-                # No scaling info, emit raw coordinates
-                self.doubleClicked.emit(widget_x, widget_y)
+                # Adjust click position by offset
+                img_click_x = widget_x - offset_x
+                img_click_y = widget_y - offset_y
+
+                # Check if click is within image bounds
+                if 0 <= img_click_x < img_w and 0 <= img_click_y < img_h:
+                    # Calculate scaling factors
+                    scale_x = self.original_image_size[0] / self.displayed_image_size[0]
+                    scale_y = self.original_image_size[1] / self.displayed_image_size[1]
+
+                    # Scale click coordinates to original image size
+                    orig_x = int(img_click_x * scale_x)
+                    orig_y = int(img_click_y * scale_y)
+
+                    # Emit double-click signal
+                    self.doubleClicked.emit(orig_x, orig_y)
 
 
 class DetectionDataManager:
