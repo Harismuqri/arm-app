@@ -435,6 +435,7 @@ class RobotVisionGUI(QMainWindow):
         self.mouse_click_x = 0  # Mouse click position in image coordinates
         self.mouse_click_y = 0
         self.show_info_panel = False  # Whether to show info panel
+        self.clicked_workspace_pos = None  # Store clicked position in workspace coordinates (x_mm, y_mm)
 
         # Inspection visualization box (not camera overlay)
         self.inspection_box_visible = False
@@ -1255,28 +1256,55 @@ class RobotVisionGUI(QMainWindow):
                 cv2.LINE_AA
             )
 
-        # Draw info panel if object is selected
-        if self.show_info_panel and self.selected_object:
-            # Highlight selected object with cyan border
-            cv2.polylines(annotated, [self.selected_object['corners']],
-                         isClosed=True, color=(255, 255, 0), thickness=3)
+        # Draw info panel if showing coordinates (object or empty space)
+        if self.show_info_panel:
+            if self.selected_object:
+                # Object clicked - highlight and show object info
+                cv2.polylines(annotated, [self.selected_object['corners']],
+                             isClosed=True, color=(255, 255, 0), thickness=3)
 
-            # Draw info panel near click position
-            info_lines = [
-                f"Object ID: {self.selected_object['id']}",
-                f"Position: ({self.selected_object['x_mm']:.1f}, {self.selected_object['y_mm']:.1f}) mm",
-                f"Angle: {self.selected_object['angle']:.1f} degrees",
-                f"Width: {self.selected_object['width']:.1f} mm",
-                f"Height: {self.selected_object['height']:.1f} mm"
-            ]
+                # Draw info panel near click position
+                info_lines = [
+                    f"Object ID: {self.selected_object['id']}",
+                    f"Center: ({self.selected_object['x_mm']:.1f}, {self.selected_object['y_mm']:.1f}) mm",
+                    f"Clicked: ({self.selected_object['x_mm']:.1f}, {self.selected_object['y_mm']:.1f}) mm",
+                    f"Angle: {self.selected_object['angle']:.1f} degrees",
+                    f"Width: {self.selected_object['width']:.1f} mm",
+                    f"Height: {self.selected_object['height']:.1f} mm"
+                ]
 
-            annotated = self.draw_info_panel_on_frame(
-                annotated,
-                self.mouse_click_x + 10,
-                self.mouse_click_y + 10,
-                info_lines,
-                f"Object {self.selected_object['id']}"
-            )
+                annotated = self.draw_info_panel_on_frame(
+                    annotated,
+                    self.mouse_click_x + 10,
+                    self.mouse_click_y + 10,
+                    info_lines,
+                    f"Object {self.selected_object['id']}"
+                )
+            elif self.clicked_workspace_pos is not None:
+                # Empty space clicked - show workspace coordinates
+                workspace_width = self.config.get("workspace", {}).get("width", 300)
+                workspace_height = self.config.get("workspace", {}).get("height", 300)
+
+                click_x_mm, click_y_mm = self.clicked_workspace_pos
+                in_workspace = (0 <= click_x_mm <= workspace_width and 0 <= click_y_mm <= workspace_height)
+
+                info_lines = [
+                    f"Pixel: ({self.mouse_click_x}, {self.mouse_click_y})",
+                    f"Real: ({click_x_mm:.1f}, {click_y_mm:.1f}) mm",
+                    f"In workspace: {'Yes' if in_workspace else 'No'}"
+                ]
+
+                annotated = self.draw_info_panel_on_frame(
+                    annotated,
+                    self.mouse_click_x + 10,
+                    self.mouse_click_y + 10,
+                    info_lines,
+                    "Coordinates"
+                )
+
+                # Draw crosshair at click position
+                cv2.drawMarker(annotated, (self.mouse_click_x, self.mouse_click_y),
+                              (0, 255, 255), cv2.MARKER_CROSS, 20, 2)
 
         return annotated
 
@@ -1367,11 +1395,11 @@ class RobotVisionGUI(QMainWindow):
                 self.inspection_box_angle
             )
 
-            # If click is outside box, close it
+            # If click is outside box, close it and continue with normal click handling
             if not self.point_in_polygon((x, y), box_pts.astype(int)):
                 self.inspection_box_visible = False
                 print("[GUI] Inspection box closed")
-                return
+                # Don't return - allow normal click handling to proceed
 
         # Normal single-click handling
         self.mouse_click_x = x
@@ -1414,7 +1442,7 @@ class RobotVisionGUI(QMainWindow):
         # If clicked on empty space
         if not clicked_on_object:
             self.selected_object = None
-            self.show_info_panel = False
+            self.show_info_panel = True  # Show info panel for empty space too
 
             # Convert click position to workspace coordinates and display
             if self.H_camera_to_workspace is not None:
@@ -1422,6 +1450,9 @@ class RobotVisionGUI(QMainWindow):
                 workspace_coord = cv2.perspectiveTransform(click_pt, self.H_camera_to_workspace).reshape(-1, 2)
                 click_x_mm = workspace_coord[0][0]
                 click_y_mm = workspace_coord[0][1]
+
+                # Store clicked workspace position
+                self.clicked_workspace_pos = (click_x_mm, click_y_mm)
 
                 # Check if inside workspace
                 workspace_width = self.config.get("workspace", {}).get("width", 300)
@@ -1441,6 +1472,7 @@ class RobotVisionGUI(QMainWindow):
                     print(f"[WARNING] Click outside workspace: ({click_x_mm:.1f}, {click_y_mm:.1f}) mm")
                     self.detection_info.clear()
             else:
+                self.clicked_workspace_pos = None
                 print(f"[GUI CLICK] Empty space at pixel ({x}, {y})")
                 print(f"[WARNING] No calibration available")
                 self.detection_info.clear()
