@@ -419,9 +419,7 @@ class RobotVisionGUI(QMainWindow):
         self.inspection_box_object_data = None  # Store object data for reference
 
         # Shared memory managers
-        self.detection_data_mgr = None  # DetectionData shared memory manager
-        self.click_data_mgr = None  # ClickData shared memory manager
-        self.inspect_data_mgr = None  # InspectData shared memory manager
+        self.detection_data_mgr = None  # DetectionData shared memory manager (INFO ONLY - no control)
 
         # Detection status tracking (for shared memory updates)
         self.last_saved_status = None
@@ -1367,28 +1365,8 @@ class RobotVisionGUI(QMainWindow):
                 self.selected_object = obj_data
                 self.show_info_panel = True
                 clicked_on_object = True
-                print(f"[GUI CLICK] Object {obj_data['id']}: ({obj_data['x_mm']:.1f}, {obj_data['y_mm']:.1f}) mm")
-
-                # Send click data to xarm-motion via shared memory
-                if self.click_data_mgr:
-                    # Transform click to workspace coordinates if calibration is available
-                    if self.H_camera_to_workspace is not None:
-                        click_pt = np.array([[x, y]], dtype=np.float32).reshape(-1, 1, 2)
-                        workspace_coord = cv2.perspectiveTransform(click_pt, self.H_camera_to_workspace).reshape(-1, 2)
-                        click_x_mm = workspace_coord[0][0]
-                        click_y_mm = workspace_coord[0][1]
-
-                        # Send object center position with angle and dimensions
-                        self.click_data_mgr.write_click(
-                            obj_data['x_mm'],  # Use object center, not click position
-                            obj_data['y_mm'],
-                            button="left",  # Default to left click (MOVE)
-                            angle=obj_data['angle'],
-                            width=obj_data['width'],
-                            height=obj_data['height']
-                        )
-                    else:
-                        print("[WARNING] No calibration available - cannot send click data")
+                print(f"[GUI INFO] Object {obj_data['id']}: ({obj_data['x_mm']:.1f}, {obj_data['y_mm']:.1f}) mm")
+                print(f"[GUI INFO] INFO ONLY MODE - No control commands sent")
 
                 # Update detection info text
                 info_text = f"Selected Object {obj_data['id']}:\n"
@@ -1430,32 +1408,13 @@ class RobotVisionGUI(QMainWindow):
                 self.inspection_box_angle = obj_data['angle']  # Start with object's angle
                 self.inspection_box_object_data = obj_data
 
-                # Send inspection command to xarm-motion via shared memory
-                if self.inspect_data_mgr:
-                    if self.H_camera_to_workspace is not None:
-                        # Transform click position to workspace coordinates
-                        click_pt = np.array([[x, y]], dtype=np.float32).reshape(-1, 1, 2)
-                        workspace_coord = cv2.perspectiveTransform(click_pt, self.H_camera_to_workspace).reshape(-1, 2)
-                        target_x_mm = workspace_coord[0][0]
-                        target_y_mm = workspace_coord[0][1]
-
-                        # Send inspection command with clicked position (not object center)
-                        self.inspect_data_mgr.write_inspect_command(
-                            target_x_mm,  # Use clicked position for inspection
-                            target_y_mm,
-                            angle=obj_data['angle'],
-                            width=obj_data['width'],
-                            height=obj_data['height']
-                        )
-                    else:
-                        print("[WARNING] No calibration available - cannot send inspection command")
-
-                print(f"[GUI] Inspection box opened for Object {obj_data['id']}")
-                print(f"[GUI] Object size: {obj_data['width']:.1f}x{obj_data['height']:.1f} mm")
-                print(f"[GUI] Box size: {self.inspection_box_width}x{self.inspection_box_height} pixels")
-                print(f"[GUI] Initial angle: {self.inspection_box_angle:.1f}°")
-                print(f"[GUI] Position: ({x}, {y})")
-                print(f"[GUI] Use ← → arrows to rotate, ESC or click outside to close")
+                print(f"[GUI INFO] Inspection box opened for Object {obj_data['id']}")
+                print(f"[GUI INFO] Object size: {obj_data['width']:.1f}x{obj_data['height']:.1f} mm")
+                print(f"[GUI INFO] Box size: {self.inspection_box_width}x{self.inspection_box_height} pixels")
+                print(f"[GUI INFO] Initial angle: {self.inspection_box_angle:.1f}°")
+                print(f"[GUI INFO] Position: ({x}, {y})")
+                print(f"[GUI INFO] INFO ONLY MODE - No inspection commands sent")
+                print(f"[GUI INFO] Use ← → arrows to rotate, ESC or click outside to close")
                 break
 
     def get_rotated_box_points(self, cx, cy, width, height, angle):
@@ -1648,21 +1607,11 @@ class RobotVisionGUI(QMainWindow):
             QMessageBox.critical(self, "Error", f"Failed to stop system: {str(e)}")
 
     def initialize_shared_memory(self):
-        """Initialize shared memory for communication with xarm-motion"""
+        """Initialize shared memory for communication with xarm-motion (INFO ONLY MODE)"""
         try:
             # Detection data shared memory (writes detection results for xarm-motion)
             self.detection_data_mgr = DetectionDataManager(name="DetectionData", size=4096)
-            print("[SharedMemory] DetectionData initialized (writing mode)")
-
-            # Click data shared memory (writes click commands for xarm-motion)
-            self.click_data_mgr = ClickDataManager(name="ClickData", size=512)
-            print("[SharedMemory] ClickData initialized (writing mode)")
-
-            # Inspect data shared memory (writes inspection commands for xarm-motion)
-            self.inspect_data_mgr = InspectDataManager(name="InspectData", size=512)
-            print("[SharedMemory] InspectData initialized (writing mode)")
-
-            print("[SharedMemory] All shared memory initialized")
+            print("[SharedMemory] DetectionData initialized (INFO ONLY - no control)")
 
         except Exception as e:
             print(f"[SharedMemory] Error: {e}")
@@ -1672,11 +1621,7 @@ class RobotVisionGUI(QMainWindow):
         try:
             if self.detection_data_mgr:
                 self.detection_data_mgr.cleanup()
-            if self.click_data_mgr:
-                self.click_data_mgr.cleanup()
-            if self.inspect_data_mgr:
-                self.inspect_data_mgr.cleanup()
-            print("[SharedMemory] All shared memory cleaned up")
+            print("[SharedMemory] DetectionData shared memory cleaned up")
         except:
             pass
 
