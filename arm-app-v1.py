@@ -1,5 +1,5 @@
 """
-Robot Vision System - Setup & Monitoring GUI
+Intelligent Robot Positioning GUI
 PyQt6 application for calibration, dual camera visualization, and system monitoring
 Communicates with xarm-motion via shared memory
 """
