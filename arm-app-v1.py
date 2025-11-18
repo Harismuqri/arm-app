@@ -418,10 +418,10 @@ class RobotVisionGUI(QMainWindow):
         self.inspection_box_angle = 0.0  # Rotation angle in degrees
         self.inspection_box_object_data = None  # Store object data for reference
 
-        # Shared memory
-        self.detection_shm = None  # DetectionData shared memory manager
-        self.click_shm = None
-        self.inspect_shm = None
+        # Shared memory managers
+        self.detection_data_mgr = None  # DetectionData shared memory manager
+        self.click_data_mgr = None  # ClickData shared memory manager
+        self.inspect_data_mgr = None  # InspectData shared memory manager
 
         # Detection status tracking (for shared memory updates)
         self.last_saved_status = None
@@ -1146,8 +1146,8 @@ class RobotVisionGUI(QMainWindow):
                         self.last_outputs[i] = (x_mm, y_mm, angle_deg, width_mm, height_mm)
                         self.last_change_time[i] = current_time
                         # Write to shared memory immediately when object changes
-                        if self.detection_shm:
-                            self.detection_shm.update_object(i, x_mm, y_mm, angle_deg, width_mm, height_mm)
+                        if self.detection_data_mgr:
+                            self.detection_data_mgr.update_object(i, x_mm, y_mm, angle_deg, width_mm, height_mm)
 
                     # Draw center point
                     center_img = np.mean(corners, axis=0).astype(int)
@@ -1169,7 +1169,7 @@ class RobotVisionGUI(QMainWindow):
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2, cv2.LINE_AA)
 
         # Status tracking and shared memory updates (like yolo-mouse-v2.py lines 987-1020)
-        if self.detection_shm:
+        if self.detection_data_mgr:
             current_time = time.time()
             detected_ids = set([obj['id'] for obj in self.detected_objects])
 
@@ -1184,7 +1184,7 @@ class RobotVisionGUI(QMainWindow):
             # Update shared memory status
             if status_text == "Ready":
                 if status_text != self.last_saved_status:
-                    self.detection_shm.update_status(status_text)
+                    self.detection_data_mgr.update_status(status_text)
                     self.last_saved_status = status_text
 
                 # Update all detected objects in shared memory
@@ -1193,20 +1193,20 @@ class RobotVisionGUI(QMainWindow):
                     prev_obj = self.last_saved_objects.get(obj_id)
                     curr_obj = (obj['x_mm'], obj['y_mm'], obj['angle'], obj['width'], obj['height'])
                     if prev_obj != curr_obj:
-                        self.detection_shm.update_object(obj_id, obj['x_mm'], obj['y_mm'], obj['angle'], obj['width'], obj['height'])
+                        self.detection_data_mgr.update_object(obj_id, obj['x_mm'], obj['y_mm'], obj['angle'], obj['width'], obj['height'])
                         self.last_saved_objects[obj_id] = curr_obj
 
             elif status_text == "Not Ready":
                 if status_text != self.last_saved_status:
-                    self.detection_shm.update_status(status_text)
+                    self.detection_data_mgr.update_status(status_text)
                     self.last_saved_status = status_text
 
-                self.detection_shm.clear_all_objects()
+                self.detection_data_mgr.clear_all_objects()
                 self.last_saved_objects.clear()
 
             else:  # Detect
                 if status_text != self.last_saved_status:
-                    self.detection_shm.update_status(status_text)
+                    self.detection_data_mgr.update_status(status_text)
                     self.last_saved_status = status_text
 
             # Draw status on frame
@@ -1370,7 +1370,7 @@ class RobotVisionGUI(QMainWindow):
                 print(f"[GUI CLICK] Object {obj_data['id']}: ({obj_data['x_mm']:.1f}, {obj_data['y_mm']:.1f}) mm")
 
                 # Send click data to xarm-motion via shared memory
-                if self.click_shm:
+                if self.click_data_mgr:
                     # Transform click to workspace coordinates if calibration is available
                     if self.H_camera_to_workspace is not None:
                         click_pt = np.array([[x, y]], dtype=np.float32).reshape(-1, 1, 2)
@@ -1379,7 +1379,7 @@ class RobotVisionGUI(QMainWindow):
                         click_y_mm = workspace_coord[0][1]
 
                         # Send object center position with angle and dimensions
-                        self.click_shm.write_click(
+                        self.click_data_mgr.write_click(
                             obj_data['x_mm'],  # Use object center, not click position
                             obj_data['y_mm'],
                             button="left",  # Default to left click (MOVE)
@@ -1431,7 +1431,7 @@ class RobotVisionGUI(QMainWindow):
                 self.inspection_box_object_data = obj_data
 
                 # Send inspection command to xarm-motion via shared memory
-                if self.inspect_shm:
+                if self.inspect_data_mgr:
                     if self.H_camera_to_workspace is not None:
                         # Transform click position to workspace coordinates
                         click_pt = np.array([[x, y]], dtype=np.float32).reshape(-1, 1, 2)
@@ -1440,7 +1440,7 @@ class RobotVisionGUI(QMainWindow):
                         target_y_mm = workspace_coord[0][1]
 
                         # Send inspection command with clicked position (not object center)
-                        self.inspect_shm.write_inspect_command(
+                        self.inspect_data_mgr.write_inspect_command(
                             target_x_mm,  # Use clicked position for inspection
                             target_y_mm,
                             angle=obj_data['angle'],
@@ -1651,15 +1651,15 @@ class RobotVisionGUI(QMainWindow):
         """Initialize shared memory for communication with xarm-motion"""
         try:
             # Detection data shared memory (writes detection results for xarm-motion)
-            self.detection_shm = DetectionDataManager(name="DetectionData", size=4096)
+            self.detection_data_mgr = DetectionDataManager(name="DetectionData", size=4096)
             print("[SharedMemory] DetectionData initialized (writing mode)")
 
             # Click data shared memory (writes click commands for xarm-motion)
-            self.click_shm = ClickDataManager(name="ClickData", size=512)
+            self.click_data_mgr = ClickDataManager(name="ClickData", size=512)
             print("[SharedMemory] ClickData initialized (writing mode)")
 
             # Inspect data shared memory (writes inspection commands for xarm-motion)
-            self.inspect_shm = InspectDataManager(name="InspectData", size=512)
+            self.inspect_data_mgr = InspectDataManager(name="InspectData", size=512)
             print("[SharedMemory] InspectData initialized (writing mode)")
 
             print("[SharedMemory] All shared memory initialized")
@@ -1670,12 +1670,12 @@ class RobotVisionGUI(QMainWindow):
     def cleanup_shared_memory(self):
         """Cleanup shared memory"""
         try:
-            if self.detection_shm:
-                self.detection_shm.cleanup()
-            if self.click_shm:
-                self.click_shm.cleanup()
-            if self.inspect_shm:
-                self.inspect_shm.cleanup()
+            if self.detection_data_mgr:
+                self.detection_data_mgr.cleanup()
+            if self.click_data_mgr:
+                self.click_data_mgr.cleanup()
+            if self.inspect_data_mgr:
+                self.inspect_data_mgr.cleanup()
             print("[SharedMemory] All shared memory cleaned up")
         except:
             pass
