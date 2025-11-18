@@ -626,9 +626,9 @@ def auto_calibrate_homography(frame):
 def main():
     global mouse_clicked, mouse_x, mouse_y, selected_object, show_coordinates, inspection_mode
 
-    shm_manager = SharedMemoryManager()
-    click_manager = ClickDataManager()
-    inspect_manager = InspectDataManager()
+    detection_data_mgr = SharedMemoryManager()
+    click_data_mgr = ClickDataManager()
+    inspect_data_mgr = InspectDataManager()
 
     last_saved_status = None
     last_saved_objects = {}
@@ -642,7 +642,7 @@ def main():
     if num_cameras == 0:
         print("[ERROR] No FLIR cameras found.")
         system.ReleaseInstance()
-        shm_manager.cleanup()
+        detection_data_mgr.cleanup()
         return
 
     # Validate and adjust camera indices if needed
@@ -663,7 +663,7 @@ def main():
         print(f"[ERROR] Failed to initialize detection camera: {e}")
         cam_list.Clear()
         system.ReleaseInstance()
-        shm_manager.cleanup()
+        detection_data_mgr.cleanup()
         return
 
     # Initialize inspection camera (configured index - gripper-mounted)
@@ -738,7 +738,7 @@ def main():
             del cam_inspect
         cam_list.Clear()
         system.ReleaseInstance()
-        shm_manager.cleanup()
+        detection_data_mgr.cleanup()
         return
 
     H_inv = np.linalg.inv(H)
@@ -878,7 +878,7 @@ def main():
                     ):
                         last_outputs[i] = (x_mm, y_mm, angle_deg, width_mm, height_mm)
                         last_change_time[i] = current_time
-                        shm_manager.update_object(i, x_mm, y_mm, angle_deg, width_mm, height_mm)
+                        detection_data_mgr.update_object(i, x_mm, y_mm, angle_deg, width_mm, height_mm)
 
                     detected_ids.add(i)
                     color = (0, 255, 0)
@@ -931,7 +931,7 @@ def main():
                         show_coordinates = True
                         clicked_on_object = True
                         # Send object center position, ANGLE, and DIMENSIONS to robot
-                        click_manager.write_click(
+                        click_data_mgr.write_click(
                             obj_data['x_mm'],
                             obj_data['y_mm'],
                             mouse_button,
@@ -947,7 +947,7 @@ def main():
                     selected_object = None
                     show_coordinates = True
                     if 0 <= click_x_mm <= WORKSPACE_WIDTH and 0 <= click_y_mm <= WORKSPACE_HEIGHT:
-                        click_manager.write_click(click_x_mm, click_y_mm, mouse_button, angle=0.0, width=0.0, height=0.0)
+                        click_data_mgr.write_click(click_x_mm, click_y_mm, mouse_button, angle=0.0, width=0.0, height=0.0)
                     else:
                         print(f"[WARNING] Click outside workspace: ({click_x_mm:.1f}, {click_y_mm:.1f}) mm")
 
@@ -993,7 +993,7 @@ def main():
 
             if status_text == "Ready":
                 if status_text != last_saved_status:
-                    shm_manager.update_status(status_text)
+                    detection_data_mgr.update_status(status_text)
                     last_saved_status = status_text
 
                 for i in detected_ids:
@@ -1002,20 +1002,20 @@ def main():
                         prev_obj = last_saved_objects.get(i)
                         curr_obj = (x_mm, y_mm, angle_deg, width_mm, height_mm)
                         if prev_obj != curr_obj:
-                            shm_manager.update_object(i, x_mm, y_mm, angle_deg, width_mm, height_mm)
+                            detection_data_mgr.update_object(i, x_mm, y_mm, angle_deg, width_mm, height_mm)
                             last_saved_objects[i] = curr_obj
 
             elif status_text == "Not Ready":
                 if status_text != last_saved_status:
-                    shm_manager.update_status(status_text)
+                    detection_data_mgr.update_status(status_text)
                     last_saved_status = status_text
 
-                shm_manager.clear_all_objects()
+                detection_data_mgr.clear_all_objects()
                 last_saved_objects.clear()
 
             else:
                 if status_text != last_saved_status:
-                    shm_manager.update_status(status_text)
+                    detection_data_mgr.update_status(status_text)
                     last_saved_status = status_text
 
             # Status color
@@ -1080,7 +1080,7 @@ def main():
                     print(f"\n[INSPECT MODE] Inspecting Object {selected_object['id']}")
                     print(f"[INSPECT MODE] Clicked position: ({last_click_x_mm:.1f}, {last_click_y_mm:.1f}) mm")
                     print(f"[INSPECT MODE] Object center: ({selected_object['x_mm']:.1f}, {selected_object['y_mm']:.1f}) mm")
-                    inspect_manager.write_inspect_command(
+                    inspect_data_mgr.write_inspect_command(
                         last_click_x_mm,  # Use clicked position, not object center
                         last_click_y_mm,  # Use clicked position, not object center
                         selected_object['angle'],  # Use object angle for camera orientation
@@ -1106,9 +1106,9 @@ def main():
         cam_list.Clear()
         system.ReleaseInstance()
         cv2.destroyAllWindows()
-        shm_manager.cleanup()
-        click_manager.cleanup()
-        inspect_manager.cleanup()
+        detection_data_mgr.cleanup()
+        click_data_mgr.cleanup()
+        inspect_data_mgr.cleanup()
 
 if __name__ == "__main__":
     main()
