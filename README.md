@@ -75,7 +75,19 @@ This system enables a robotic arm to:
 
 ## ✅ Current Status
 
-### Recent Fixes (2025-11-18)
+### Recent Fixes (2025-11-19)
+
+| Component | Status | Details |
+|-----------|--------|---------|
+| **INFO ONLY Mode** | ✅ Added | arm-app-v1.py displays info but doesn't send robot commands |
+| **On-screen Info Panel** | ✅ Added | Click/inspect info overlay on detection display |
+| **Arrow Key Rotation** | ✅ Fixed | Inspection box rotates with arrow keys (no tab switching) |
+| **Click Detection** | ✅ Fixed | Accurate click coordinates in maximized window |
+| **Inspection Box Angle** | ✅ Fixed | Box follows object angle correctly |
+| **Window Centering** | ✅ Added | Centers on startup and after restore from maximized |
+| **Control Panel Layout** | ✅ Fixed | START/STOP buttons maintain size after maximize/restore |
+
+### Previous Fixes (2025-11-18)
 
 | Component | Status | Details |
 |-----------|--------|---------|
@@ -365,7 +377,7 @@ See `ERRORS_AND_FIXES.md` for comprehensive troubleshooting guide.
 ## 📝 Files Overview
 
 ### Main Applications
-- `arm-app-v1.py` - PyQt6 GUI with single camera + inspection box
+- `arm-app-v1.py` - PyQt6 GUI with single camera + inspection box (INFO ONLY mode - displays detection data without sending robot commands)
 - `arm-app.py` - PyQt6 GUI with dual camera side-by-side
 - `yolo-mouse-v2.py` - OpenCV-based mouse interaction system
 - `xarm-motion-v1.7.py` - Robot controller with smart positioning
@@ -424,5 +436,5 @@ For issues or questions:
 
 ---
 
-**Last Updated:** 2025-11-18
+**Last Updated:** 2025-11-19
 **Status:** ✅ Core fixes complete, ready for deployment after dependency installation
