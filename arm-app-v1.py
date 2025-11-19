@@ -509,22 +509,19 @@ class RobotVisionGUI(QMainWindow):
         main_layout = QVBoxLayout(central_widget)
 
         # Create tab widget
-        self.tabs = QTabWidget()
-        main_layout.addWidget(self.tabs)
+        tabs = QTabWidget()
+        main_layout.addWidget(tabs)
 
         # Add tabs
-        self.tabs.addTab(self.create_calibration_tab(), "Calibration Setup")
-        self.tabs.addTab(self.create_live_view_tab(), "Live Camera View")
-        self.tabs.addTab(self.create_info_tab(), "System Info")
+        tabs.addTab(self.create_calibration_tab(), "Calibration Setup")
+        tabs.addTab(self.create_live_view_tab(), "Live Camera View")
+        tabs.addTab(self.create_info_tab(), "System Info")
 
         # Add control panel at bottom
         main_layout.addWidget(self.create_control_panel())
 
         # Status bar
         self.statusBar().showMessage("Ready - Configure calibration and press START")
-
-        # Install event filter to capture arrow keys before tab widget gets them
-        self.tabs.installEventFilter(self)
 
     def create_calibration_tab(self):
         """Create calibration configuration tab"""
@@ -1771,40 +1768,8 @@ class RobotVisionGUI(QMainWindow):
 
         event.accept()
 
-    def eventFilter(self, obj, event):
-        """Event filter to intercept arrow keys before tab widget handles them"""
-        from PyQt6.QtCore import QEvent
-
-        if obj == self.tabs and event.type() == QEvent.Type.KeyPress:
-            if self.inspection_box_visible:
-                key = event.key()
-                if key == Qt.Key.Key_Left:
-                    # Rotate counter-clockwise (decrease angle)
-                    self.inspection_box_angle -= 1.0
-                    if self.inspection_box_angle < 0:
-                        self.inspection_box_angle += 360
-                    print(f"[GUI] Inspection box angle: {self.inspection_box_angle:.1f}°")
-                    return True  # Event handled, don't pass to tab widget
-
-                elif key == Qt.Key.Key_Right:
-                    # Rotate clockwise (increase angle)
-                    self.inspection_box_angle += 1.0
-                    if self.inspection_box_angle >= 360:
-                        self.inspection_box_angle -= 360
-                    print(f"[GUI] Inspection box angle: {self.inspection_box_angle:.1f}°")
-                    return True  # Event handled, don't pass to tab widget
-
-                elif key == Qt.Key.Key_Escape:
-                    # Close inspection box
-                    self.inspection_box_visible = False
-                    print("[GUI] Inspection box closed (ESC)")
-                    return True  # Event handled
-
-        # Let the event pass through normally
-        return super().eventFilter(obj, event)
-
     def keyPressEvent(self, event):
-        """Handle keyboard events for inspection box rotation (backup handler)"""
+        """Handle keyboard events for inspection box rotation"""
         from PyQt6.QtCore import Qt
 
         if self.inspection_box_visible:
