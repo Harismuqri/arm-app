@@ -523,6 +523,9 @@ class RobotVisionGUI(QMainWindow):
         # Status bar
         self.statusBar().showMessage("Ready - Configure calibration and press START")
 
+        # Install event filter on application to capture arrow keys globally
+        QApplication.instance().installEventFilter(self)
+
     def create_calibration_tab(self):
         """Create calibration configuration tab"""
         widget = QWidget()
@@ -1767,6 +1770,37 @@ class RobotVisionGUI(QMainWindow):
                 pass
 
         event.accept()
+
+    def eventFilter(self, obj, event):
+        """Event filter to intercept arrow keys globally when inspection box is visible"""
+        from PyQt6.QtCore import QEvent
+
+        if event.type() == QEvent.Type.KeyPress and self.inspection_box_visible:
+            key = event.key()
+            if key == Qt.Key.Key_Left:
+                # Rotate counter-clockwise (decrease angle)
+                self.inspection_box_angle -= 1.0
+                if self.inspection_box_angle < 0:
+                    self.inspection_box_angle += 360
+                print(f"[GUI] Inspection box angle: {self.inspection_box_angle:.1f}°")
+                return True  # Event handled, block from all widgets
+
+            elif key == Qt.Key.Key_Right:
+                # Rotate clockwise (increase angle)
+                self.inspection_box_angle += 1.0
+                if self.inspection_box_angle >= 360:
+                    self.inspection_box_angle -= 360
+                print(f"[GUI] Inspection box angle: {self.inspection_box_angle:.1f}°")
+                return True  # Event handled, block from all widgets
+
+            elif key == Qt.Key.Key_Escape:
+                # Close inspection box
+                self.inspection_box_visible = False
+                print("[GUI] Inspection box closed (ESC)")
+                return True  # Event handled
+
+        # Let the event pass through normally
+        return super().eventFilter(obj, event)
 
     def keyPressEvent(self, event):
         """Handle keyboard events for inspection box rotation"""
