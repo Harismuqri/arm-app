@@ -1847,12 +1847,10 @@ class RobotVisionGUI(QMainWindow):
         """Handle window state changes (maximize/restore)"""
         if event.type() == event.Type.WindowStateChange:
             if self.windowState() & Qt.WindowState.WindowMaximized:
-                # When window is MAXIMIZED (shows restore icon ⧉) - use BIGGER fixed size (850x720)
+                # When window is MAXIMIZED - use BIGGER fixed size (850x720)
                 self.detection_label.setFixedSize(850, 720)
             else:
-                # When window is RESTORED/Normal (shows maximize icon ⬜)
-                # Resize window FIRST, then set label to fixed smaller size
-                self.resize(900, 850)
+                # When window is RESTORED/Normal - use smaller fixed size
                 self.detection_label.setFixedSize(640, 480)
 
         super().changeEvent(event)
