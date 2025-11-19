@@ -1880,6 +1880,13 @@ class RobotVisionGUI(QMainWindow):
         self.centralWidget().adjustSize()
         self.adjustSize()
 
+        # Center window on screen after restore
+        screen = QApplication.primaryScreen().geometry()
+        window_size = self.frameGeometry()
+        x = (screen.width() - window_size.width()) // 2
+        y = (screen.height() - window_size.height()) // 2
+        self.move(x, y)
+
 
 def main():
     app = QApplication(sys.argv)
