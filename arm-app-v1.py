@@ -688,12 +688,14 @@ class RobotVisionGUI(QMainWindow):
         """Create live camera view tab"""
         widget = QWidget()
         main_layout = QVBoxLayout(widget)
+        main_layout.setSpacing(5)  # Reduce spacing between elements
 
         # Detection camera container with centered alignment
         camera_container = QHBoxLayout()
         camera_container.addStretch()  # Left spacer
 
         detection_container = QVBoxLayout()
+        detection_container.setSpacing(5)  # Reduce spacing
         detection_title = QLabel("Detection Camera")
         detection_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         detection_title.setStyleSheet("font-weight: bold; font-size: 30px;")
@@ -718,6 +720,9 @@ class RobotVisionGUI(QMainWindow):
         self.detection_info.setReadOnly(True)
         self.detection_info.setMaximumHeight(100)
         main_layout.addWidget(self.detection_info)
+
+        # Add stretch at bottom to push everything up
+        main_layout.addStretch()
 
         return widget
 
