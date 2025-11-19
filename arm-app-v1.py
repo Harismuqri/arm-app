@@ -518,7 +518,8 @@ class RobotVisionGUI(QMainWindow):
         tabs.addTab(self.create_info_tab(), "System Info")
 
         # Add control panel at bottom
-        main_layout.addWidget(self.create_control_panel())
+        self.control_panel = self.create_control_panel()
+        main_layout.addWidget(self.control_panel)
 
         # Status bar
         self.statusBar().showMessage("Ready - Configure calibration and press START")
@@ -746,9 +747,9 @@ class RobotVisionGUI(QMainWindow):
         layout = QHBoxLayout(widget)
         layout.setContentsMargins(5, 5, 5, 5)  # Reduce margins
 
-        # Set fixed size policy to prevent expansion
+        # Set fixed size policy and height to prevent expansion
         widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        widget.setMaximumHeight(60)  # Fixed maximum height
+        widget.setFixedHeight(50)  # Fixed height (not just maximum)
 
         self.start_btn = QPushButton("START System")
         self.start_btn.setStyleSheet("background-color: #4CAF50; color: white; font-size: 16px; padding: 10px;")
@@ -1871,6 +1872,11 @@ class RobotVisionGUI(QMainWindow):
     def _restore_normal_size(self):
         """Helper to restore normal window size and update layout"""
         self.resize(900, 850)
+        # Force control panel to update its geometry
+        if hasattr(self, 'control_panel'):
+            self.control_panel.updateGeometry()
+        self.centralWidget().layout().invalidate()
+        self.centralWidget().layout().activate()
         self.centralWidget().adjustSize()
         self.adjustSize()
 
