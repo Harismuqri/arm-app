@@ -1493,7 +1493,11 @@ class RobotVisionGUI(QMainWindow):
                 # Assuming workspace is 300mm and typical camera resolution
                 pixel_per_mm = 2.0  # Approximate ratio, adjust if needed
 
-                box_width_px = obj_data['width'] * pixel_per_mm
+                # When width > height, use height for box width (square inspection view)
+                if obj_data['width'] > obj_data['height']:
+                    box_width_px = obj_data['height'] * pixel_per_mm
+                else:
+                    box_width_px = obj_data['width'] * pixel_per_mm
                 box_height_px = obj_data['height'] * pixel_per_mm
 
                 # Store inspection box data
