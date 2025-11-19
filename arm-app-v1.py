@@ -122,11 +122,9 @@ class DetectionDataManager:
         """Create or attach to existing shared memory."""
         try:
             self.shm = shared_memory.SharedMemory(name=self.name, create=True, size=self.size)
-            print(f"[INFO] Created new shared memory: {self.name}")
             self._write_data({"status": "Not Ready", "timestamp": time.time(), "objects": {}})
         except FileExistsError:
             self.shm = shared_memory.SharedMemory(name=self.name, create=False)
-            print(f"[INFO] Attached to existing shared memory: {self.name}")
 
     def _write_data(self, data):
         """Write data to shared memory as JSON."""
@@ -211,7 +209,6 @@ class DetectionDataManager:
             try:
                 self.shm.close()
                 self.shm.unlink()
-                print(f"[INFO] Shared memory cleaned up: {self.name}")
             except Exception as e:
                 print(f"[ERROR] Failed to cleanup shared memory: {e}")
 
@@ -229,13 +226,10 @@ class ClickDataManager:
         """Create or attach to existing shared memory."""
         try:
             self.shm = shared_memory.SharedMemory(name=self.name, create=False)
-            print(f"[INFO] Attached to existing click data shared memory: {self.name}")
-            existing_data = self._read_data()
-            print(f"[DEBUG] Found existing click data: {existing_data}")
+            self._read_data()
         except FileNotFoundError:
             try:
                 self.shm = shared_memory.SharedMemory(name=self.name, create=True, size=self.size)
-                print(f"[INFO] Created click data shared memory: {self.name}")
                 self._write_data({"click_x": 0, "click_y": 0, "timestamp": 0, "processed": True, "button": "none", "angle": 0.0})
             except Exception as e:
                 print(f"[ERROR] Failed to create shared memory: {e}")
@@ -253,13 +247,9 @@ class ClickDataManager:
 
             self.shm.buf[:4] = struct.pack('I', len(json_bytes))
             self.shm.buf[4:4+len(json_bytes)] = json_bytes
-
-            print(f"[DEBUG] Wrote {len(json_bytes)} bytes to shared memory '{self.name}'")
             return True
         except Exception as e:
             print(f"[ERROR] Failed to write click data: {e}")
-            import traceback
-            traceback.print_exc()
             return False
 
     def _read_data(self):
@@ -300,8 +290,6 @@ class ClickDataManager:
             "processed": False
         }
         self._write_data(data)
-        button_action = {"left": "MOVE", "middle": "UNUSED", "right": "PICK/PLACE"}
-        print(f"[CLICK-{button_action.get(button, button).upper()}] Sent to robot: ({x:.1f}, {y:.1f}) mm, Angle: {angle:.1f}°, Size: {width:.1f}x{height:.1f}mm")
 
     def cleanup(self):
         """Close and unlink shared memory."""
@@ -309,7 +297,6 @@ class ClickDataManager:
             try:
                 self.shm.close()
                 self.shm.unlink()
-                print(f"[INFO] Click data shared memory cleaned up: {self.name}")
             except Exception as e:
                 print(f"[ERROR] Failed to cleanup: {e}")
 
@@ -327,11 +314,9 @@ class InspectDataManager:
         """Create or attach to existing shared memory."""
         try:
             self.shm = shared_memory.SharedMemory(name=self.name, create=False)
-            print(f"[INFO] Attached to existing inspect data shared memory: {self.name}")
         except FileNotFoundError:
             try:
                 self.shm = shared_memory.SharedMemory(name=self.name, create=True, size=self.size)
-                print(f"[INFO] Created inspect data shared memory: {self.name}")
                 # Get camera offset from config
                 camera_offset = self.get_camera_offset_from_config()
                 self._write_data({
@@ -396,8 +381,6 @@ class InspectDataManager:
             "processed": False
         }
         self._write_data(data)
-        print(f"[INSPECT] Inspection command sent: Target ({target_x:.1f}, {target_y:.1f}) mm - Angle: {angle:.1f}°")
-        print(f"[INSPECT] Camera offset: ({camera_offset.get('offset_x', 7.0):.1f}, {camera_offset.get('offset_y', 92.9):.1f}) ± {camera_offset.get('offset_error', 0.0):.1f} mm")
 
     def cleanup(self):
         """Close and unlink shared memory."""
@@ -405,7 +388,6 @@ class InspectDataManager:
             try:
                 self.shm.close()
                 self.shm.unlink()
-                print(f"[INFO] Inspect data shared memory cleaned up: {self.name}")
             except Exception as e:
                 print(f"[ERROR] Failed to cleanup: {e}")
 
@@ -469,8 +451,6 @@ class RobotVisionGUI(QMainWindow):
         self.camera_timer = QTimer()
         self.camera_timer.timeout.connect(self.update_camera_feeds)
 
-        print("[GUI] Initialized")
-
     def load_config(self, path="config.json"):
         """Load configuration from JSON file"""
         try:
@@ -480,10 +460,9 @@ class RobotVisionGUI(QMainWindow):
 
             with open(path, "r") as f:
                 config = json.load(f)
-                print(f"[Config] Loaded from {path}")
                 return config
         except Exception as e:
-            print(f"[Config] Failed to load: {e}")
+            print(f"[ERROR] Config load failed: {e}")
             return self.get_default_config()
 
     def get_default_config(self):
@@ -810,7 +789,7 @@ class RobotVisionGUI(QMainWindow):
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Calibration failed: {str(e)}")
-            print(f"[Error] Auto calibration: {e}")
+            print(f"[ERROR] Auto calibration: {e}")
 
     def perform_circle_calibration(self, frame):
         """Perform circle-based calibration (from your existing code)"""
@@ -958,11 +937,6 @@ class RobotVisionGUI(QMainWindow):
                 self.robot_cal_inputs['TL']['robot_x'].setText(f"{tl_robot[0]:.1f}")
                 self.robot_cal_inputs['TL']['robot_y'].setText(f"{tl_robot[1]:.1f}")
 
-                print(f"[AUTO-CALC] BL: ({bl_robot[0]:.1f}, {bl_robot[1]:.1f})")
-                print(f"[AUTO-CALC] TR: ({tr_robot[0]:.1f}, {tr_robot[1]:.1f})")
-                print(f"[AUTO-CALC] BR (calculated): ({br_robot[0]:.1f}, {br_robot[1]:.1f})")
-                print(f"[AUTO-CALC] TL (calculated): ({tl_robot[0]:.1f}, {tl_robot[1]:.1f})")
-
             else:
                 # Manual mode - use all 4 points
                 corners = ['BL', 'BR', 'TR', 'TL']
@@ -1002,36 +976,33 @@ class RobotVisionGUI(QMainWindow):
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Transformation calculation failed: {str(e)}")
-            print(f"[Error] Robot transformation: {e}")
+            print(f"[ERROR] Robot transformation: {e}")
 
     def initialize_cameras(self):
         """Initialize both cameras"""
         try:
-            print("[Camera] Initializing...")
             self.camera_system = PySpin.System.GetInstance()
             cam_list = self.camera_system.GetCameras()
 
             if cam_list.GetSize() < 1:
-                print("[Camera] No cameras found")
+                print("[ERROR] No cameras found")
                 return False
 
             # Initialize detection camera
             self.detection_camera = cam_list.GetByIndex(0)
             self.detection_camera.Init()
             self.detection_camera.BeginAcquisition()
-            print("[Camera] Detection camera initialized")
 
             # Initialize inspection camera if available
             if cam_list.GetSize() >= 2:
                 self.inspection_camera = cam_list.GetByIndex(1)
                 self.inspection_camera.Init()
                 self.inspection_camera.BeginAcquisition()
-                print("[Camera] Inspection camera initialized")
 
             return True
 
         except Exception as e:
-            print(f"[Camera] Initialization error: {e}")
+            print(f"[ERROR] Camera initialization: {e}")
             return False
 
     def get_detection_frame(self):
@@ -1416,38 +1387,22 @@ class RobotVisionGUI(QMainWindow):
             # If click is outside box, close it and continue with normal click handling
             if not self.point_in_polygon((x, y), box_pts.astype(int)):
                 self.inspection_box_visible = False
-                print("[GUI] Inspection box closed")
                 # Don't return - allow normal click handling to proceed
 
         # Normal single-click handling
         self.mouse_click_x = x
         self.mouse_click_y = y
 
-        print(f"[DEBUG] Click at pixel ({x}, {y})")
-        print(f"[DEBUG] Number of detected objects: {len(self.detected_objects)}")
-
         # Check if clicked on any detected object
         clicked_on_object = False
         for obj_data in self.detected_objects:
-            # Debug: print object corners
-            print(f"[DEBUG] Object {obj_data['id']} corners: {obj_data['corners']}")
-
             # Test if point is in polygon
             result = self.point_in_polygon((x, y), obj_data['corners'])
-            print(f"[DEBUG] Object {obj_data['id']} point_in_polygon result: {result}")
 
             if result:
                 self.selected_object = obj_data
                 self.show_info_panel = True
                 clicked_on_object = True
-                print(f"[GUI CLICK] Object {obj_data['id']}: ({obj_data['x_mm']:.1f}, {obj_data['y_mm']:.1f}) mm")
-
-                # Display click data WITHOUT sending to robot
-                if self.click_data_mgr and self.H_camera_to_workspace is not None:
-                    print(f"[CLICK INFO] Position: ({obj_data['x_mm']:.1f}, {obj_data['y_mm']:.1f}) mm")
-                    print(f"[CLICK INFO] Angle: {obj_data['angle']:.1f}°")
-                    print(f"[CLICK INFO] Size: {obj_data['width']:.1f}x{obj_data['height']:.1f} mm")
-                    # NOTE: write_click() is NOT called - no robot control
 
                 # Update detection info text
                 info_text = f"Selected Object {obj_data['id']}:\n"
@@ -1477,35 +1432,23 @@ class RobotVisionGUI(QMainWindow):
                 workspace_height = self.config.get("workspace", {}).get("height", 300)
 
                 if 0 <= click_x_mm <= workspace_width and 0 <= click_y_mm <= workspace_height:
-                    print(f"[GUI CLICK] Empty space at pixel ({x}, {y})")
-                    print(f"[CLICK INFO] Workspace position: ({click_x_mm:.1f}, {click_y_mm:.1f}) mm")
-
                     # Update detection info text
                     info_text = f"Clicked Position:\n"
                     info_text += f"Workspace: ({click_x_mm:.1f}, {click_y_mm:.1f}) mm\n"
                     info_text += f"Pixel: ({x}, {y})"
                     self.detection_info.setText(info_text)
                 else:
-                    print(f"[GUI CLICK] Empty space at pixel ({x}, {y})")
-                    print(f"[WARNING] Click outside workspace: ({click_x_mm:.1f}, {click_y_mm:.1f}) mm")
                     self.detection_info.clear()
             else:
                 self.clicked_workspace_pos = None
-                print(f"[GUI CLICK] Empty space at pixel ({x}, {y})")
-                print(f"[WARNING] No calibration available")
                 self.detection_info.clear()
 
     def on_detection_double_click(self, x, y):
         """Handle double-click on detection camera - show inspection visualization box"""
-        print(f"[GUI DOUBLE-CLICK] at pixel ({x}, {y})")
-
         # Check if double-clicked on any detected object
         for obj_data in self.detected_objects:
             if self.point_in_polygon((x, y), obj_data['corners']):
                 # Calculate box size based on object dimensions (convert mm to pixels)
-                # Use the same scale as the homography transformation
-                # For now, we'll use a simple pixel-to-mm ratio
-                # Assuming workspace is 300mm and typical camera resolution
                 pixel_per_mm = 2.0  # Approximate ratio, adjust if needed
 
                 # When width > height, use height for box width (square inspection view)
@@ -1523,23 +1466,6 @@ class RobotVisionGUI(QMainWindow):
                 self.inspection_box_height = int(box_height_px)
                 self.inspection_box_angle = obj_data['angle']  # Start with object's angle
                 self.inspection_box_object_data = obj_data
-
-                # Display inspection data WITHOUT sending to robot
-                if self.inspect_data_mgr and self.H_camera_to_workspace is not None:
-                    # Calculate target position for display purposes
-                    click_pt = np.array([[x, y]], dtype=np.float32).reshape(-1, 1, 2)
-                    workspace_coord = cv2.perspectiveTransform(click_pt, self.H_camera_to_workspace).reshape(-1, 2)
-                    target_x_mm = workspace_coord[0][0]
-                    target_y_mm = workspace_coord[0][1]
-
-                    print(f"[INSPECT INFO] Object {obj_data['id']} selected for inspection")
-                    print(f"[INSPECT INFO] Target position: ({target_x_mm:.1f}, {target_y_mm:.1f}) mm")
-                    print(f"[INSPECT INFO] Object angle: {obj_data['angle']:.1f}°")
-                    print(f"[INSPECT INFO] Object size: {obj_data['width']:.1f}x{obj_data['height']:.1f} mm")
-                    # NOTE: write_inspect_command() is NOT called - no robot control
-
-                print(f"[GUI] Inspection box visualization opened")
-                print(f"[GUI] Use ← → arrows to rotate, ESC or click outside to close")
                 break
 
     def get_rotated_box_points(self, cx, cy, width, height, angle):
@@ -1704,11 +1630,9 @@ class RobotVisionGUI(QMainWindow):
             self.statusBar().showMessage("System RUNNING")
             self.update_info_display()
 
-            print("[GUI] System started")
-
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to start system: {str(e)}")
-            print(f"[Error] Start system: {e}")
+            print(f"[ERROR] Start system: {e}")
 
     def stop_system(self):
         """Stop the vision system"""
@@ -1726,8 +1650,6 @@ class RobotVisionGUI(QMainWindow):
             self.statusBar().showMessage("System STOPPED")
             self.update_info_display()
 
-            print("[GUI] System stopped")
-
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to stop system: {str(e)}")
 
@@ -1736,15 +1658,13 @@ class RobotVisionGUI(QMainWindow):
         try:
             # Detection data shared memory (writes detection results for monitoring)
             self.detection_data_mgr = DetectionDataManager(name="DetectionData", size=4096)
-            print("[SharedMemory] DetectionData initialized (INFO ONLY - no control)")
 
             # Click and Inspect managers (initialized but commands are NOT sent to robot)
             self.click_data_mgr = ClickDataManager(name="ClickData", size=512)
             self.inspect_data_mgr = InspectDataManager(name="InspectData", size=512)
-            print("[SharedMemory] ClickData and InspectData initialized (INFO display only)")
 
         except Exception as e:
-            print(f"[SharedMemory] Error: {e}")
+            print(f"[ERROR] SharedMemory: {e}")
 
     def cleanup_shared_memory(self):
         """Cleanup shared memory"""
@@ -1755,7 +1675,6 @@ class RobotVisionGUI(QMainWindow):
                 self.click_data_mgr.cleanup()
             if self.inspect_data_mgr:
                 self.inspect_data_mgr.cleanup()
-            print("[SharedMemory] All shared memory cleaned up")
         except:
             pass
 
@@ -1801,7 +1720,6 @@ class RobotVisionGUI(QMainWindow):
                 self.inspection_box_angle -= 1.0
                 if self.inspection_box_angle < 0:
                     self.inspection_box_angle += 360
-                print(f"[GUI] Inspection box angle: {self.inspection_box_angle:.1f}°")
                 return True  # Event handled, block from all widgets
 
             elif key == Qt.Key.Key_Right:
@@ -1809,13 +1727,11 @@ class RobotVisionGUI(QMainWindow):
                 self.inspection_box_angle += 1.0
                 if self.inspection_box_angle >= 360:
                     self.inspection_box_angle -= 360
-                print(f"[GUI] Inspection box angle: {self.inspection_box_angle:.1f}°")
                 return True  # Event handled, block from all widgets
 
             elif key == Qt.Key.Key_Escape:
                 # Close inspection box
                 self.inspection_box_visible = False
-                print("[GUI] Inspection box closed (ESC)")
                 return True  # Event handled
 
         # Let the event pass through normally
@@ -1831,7 +1747,6 @@ class RobotVisionGUI(QMainWindow):
                 self.inspection_box_angle -= 1.0
                 if self.inspection_box_angle < 0:
                     self.inspection_box_angle += 360
-                print(f"[GUI] Inspection box angle: {self.inspection_box_angle:.1f}°")
                 event.accept()  # Consume event to prevent tab navigation
 
             elif event.key() == Qt.Key.Key_Right:
@@ -1839,13 +1754,11 @@ class RobotVisionGUI(QMainWindow):
                 self.inspection_box_angle += 1.0
                 if self.inspection_box_angle >= 360:
                     self.inspection_box_angle -= 360
-                print(f"[GUI] Inspection box angle: {self.inspection_box_angle:.1f}°")
                 event.accept()  # Consume event to prevent tab navigation
 
             elif event.key() == Qt.Key.Key_Escape:
                 # Close inspection box
                 self.inspection_box_visible = False
-                print("[GUI] Inspection box closed (ESC)")
                 event.accept()  # Consume event
             else:
                 # Pass other events to parent
