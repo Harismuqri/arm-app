@@ -16,7 +16,7 @@ import time
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                               QHBoxLayout, QTabWidget, QLabel, QLineEdit,
                               QPushButton, QGroupBox, QGridLayout, QTextEdit,
-                              QCheckBox, QComboBox, QMessageBox)
+                              QCheckBox, QComboBox, QMessageBox, QSizePolicy)
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap, QFont
 from ultralytics import YOLO
@@ -744,6 +744,11 @@ class RobotVisionGUI(QMainWindow):
         """Create control panel with START/STOP buttons"""
         widget = QWidget()
         layout = QHBoxLayout(widget)
+        layout.setContentsMargins(5, 5, 5, 5)  # Reduce margins
+
+        # Set fixed size policy to prevent expansion
+        widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        widget.setMaximumHeight(60)  # Fixed maximum height
 
         self.start_btn = QPushButton("START System")
         self.start_btn.setStyleSheet("background-color: #4CAF50; color: white; font-size: 16px; padding: 10px;")
