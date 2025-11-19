@@ -1594,7 +1594,7 @@ class RobotVisionGUI(QMainWindow):
 
         # Draw angle text near the box
         if self.inspection_box_object_data:
-            text = f"Angle: {self.inspection_box_angle:.1f}°"
+            text = f"Angle: {self.inspection_box_angle:.1f}"
             text_pos = (self.inspection_box_x + 10, self.inspection_box_y - 10)
             cv2.putText(frame, text, text_pos, cv2.FONT_HERSHEY_SIMPLEX,
                        0.6, (255, 255, 0), 2, cv2.LINE_AA)
