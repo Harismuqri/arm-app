@@ -1857,6 +1857,14 @@ class RobotVisionGUI(QMainWindow):
 def main():
     app = QApplication(sys.argv)
     window = RobotVisionGUI()
+
+    # Center window on screen
+    screen = app.primaryScreen().geometry()
+    window_size = window.frameGeometry()
+    x = (screen.width() - window_size.width()) // 2
+    y = (screen.height() - window_size.height()) // 2
+    window.move(x, y)
+
     window.show()
     sys.exit(app.exec())
 
