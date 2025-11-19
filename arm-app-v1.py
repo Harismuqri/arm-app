@@ -665,8 +665,12 @@ class RobotVisionGUI(QMainWindow):
         # Pre-fill workspace coordinates
         self.robot_cal_inputs['BL']['ws_x'].setText("0")
         self.robot_cal_inputs['BL']['ws_y'].setText("0")
+        self.robot_cal_inputs['BR']['ws_x'].setText("300")
+        self.robot_cal_inputs['BR']['ws_y'].setText("0")
         self.robot_cal_inputs['TR']['ws_x'].setText("300")
         self.robot_cal_inputs['TR']['ws_y'].setText("300")
+        self.robot_cal_inputs['TL']['ws_x'].setText("0")
+        self.robot_cal_inputs['TL']['ws_y'].setText("300")
 
         calculate_btn = QPushButton("Calculate Robot Transformation")
         calculate_btn.clicked.connect(self.calculate_robot_transformation)
