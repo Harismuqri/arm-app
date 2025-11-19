@@ -1859,9 +1859,15 @@ class RobotVisionGUI(QMainWindow):
                 self.detection_label.setFixedSize(640, 480)
                 # Use QTimer to delay resize so layout calculates first
                 from PyQt6.QtCore import QTimer
-                QTimer.singleShot(10, lambda: self.resize(900, 850))
+                QTimer.singleShot(10, lambda: self._restore_normal_size())
 
         super().changeEvent(event)
+
+    def _restore_normal_size(self):
+        """Helper to restore normal window size and update layout"""
+        self.resize(900, 850)
+        self.centralWidget().adjustSize()
+        self.adjustSize()
 
 
 def main():
