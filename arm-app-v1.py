@@ -1525,8 +1525,8 @@ class RobotVisionGUI(QMainWindow):
 
     def get_rotated_box_points(self, cx, cy, width, height, angle):
         """Calculate the 4 corner points of a rotated rectangle"""
-        # Convert angle to radians
-        angle_rad = np.radians(angle)
+        # Convert angle to radians (negate for image coordinates where Y is down)
+        angle_rad = np.radians(-angle)
 
         # Half dimensions
         w2 = width / 2
@@ -1571,11 +1571,11 @@ class RobotVisionGUI(QMainWindow):
         # Create overlay for transparency
         overlay = frame.copy()
 
-        # Fill the box with cyan color (will be made transparent)
-        cv2.fillPoly(overlay, [box_pts], (255, 255, 0))  # Cyan fill
+        # Fill the box with black color (will be made transparent)
+        cv2.fillPoly(overlay, [box_pts], (0, 0, 0))  # Black fill
 
-        # Blend with original frame (70% transparent = 30% opacity)
-        cv2.addWeighted(overlay, 0.3, frame, 0.7, 0, frame)
+        # Blend with original frame (50% transparent = 50% opacity)
+        cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
 
         # Draw cyan border (thickness 2)
         cv2.polylines(frame, [box_pts], isClosed=True, color=(255, 255, 0), thickness=2)
