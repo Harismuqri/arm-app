@@ -1851,8 +1851,9 @@ class RobotVisionGUI(QMainWindow):
                 self.detection_label.setFixedSize(850, 720)
             else:
                 # When window is RESTORED/Normal - resize window and set smaller label size
-                self.resize(900, 850)
                 self.detection_label.setFixedSize(640, 480)
+                self.resize(900, 850)
+                self.adjustSize()
 
         super().changeEvent(event)
 
