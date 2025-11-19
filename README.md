@@ -1,4 +1,4 @@
-# ARM-APP - Robotic Vision System
+# IROPO - Intelligent Robot Positioning
 
 A sophisticated robotic vision system integrating YOLO object detection with xArm robotic arm control for automated pick-and-place operations with dual-camera inspection capabilities.
 
