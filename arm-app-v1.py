@@ -1850,13 +1850,9 @@ class RobotVisionGUI(QMainWindow):
                 # When window is MAXIMIZED - use BIGGER fixed size (850x720)
                 self.detection_label.setFixedSize(850, 720)
             else:
-                # When window is RESTORED/Normal - use smaller fixed size
+                # When window is RESTORED/Normal - resize window and set smaller label size
+                self.resize(900, 850)
                 self.detection_label.setFixedSize(640, 480)
-
-                # Force layout to recalculate after restore
-                from PyQt6.QtCore import QTimer
-                QTimer.singleShot(0, lambda: self.centralWidget().layout().invalidate())
-                QTimer.singleShot(0, lambda: self.centralWidget().layout().activate())
 
         super().changeEvent(event)
 
