@@ -813,8 +813,8 @@ class RobotVisionGUI(QMainWindow):
             minDist=100,
             param1=100,
             param2=30,
-            minRadius=30,
-            maxRadius=80
+            minRadius=10,
+            maxRadius=30
         )
 
         if circles is None:
@@ -822,7 +822,7 @@ class RobotVisionGUI(QMainWindow):
 
         filtered = []
         for (x, y, r) in np.round(circles[0]).astype("int"):
-            if 30 <= r <= 100:
+            if 10 <= r <= 50:
                 filtered.append((x, y, r))
 
         if len(filtered) < 4:
