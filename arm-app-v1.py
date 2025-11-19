@@ -1852,8 +1852,9 @@ class RobotVisionGUI(QMainWindow):
             else:
                 # When window is RESTORED/Normal - resize window and set smaller label size
                 self.detection_label.setFixedSize(640, 480)
-                self.resize(900, 850)
-                self.adjustSize()
+                # Use QTimer to delay resize so layout calculates first
+                from PyQt6.QtCore import QTimer
+                QTimer.singleShot(10, lambda: self.resize(900, 850))
 
         super().changeEvent(event)
 
