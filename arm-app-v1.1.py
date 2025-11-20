@@ -531,6 +531,7 @@ class RobotVisionGUI(QMainWindow):
 
         # === Auto Calibration Container ===
         self.auto_cal_container = QWidget()
+        self.auto_cal_container.setStyleSheet("background-color: transparent;")
         auto_cal_layout = QVBoxLayout(self.auto_cal_container)
         auto_cal_layout.setContentsMargins(0, 10, 0, 0)
 
