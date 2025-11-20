@@ -794,8 +794,8 @@ class RobotVisionGUI(QMainWindow):
         self.setStyleSheet("""
             * { color: #000000; }
             QWidget { background-color: #f0f0f0; }
-            QLineEdit, QTextEdit, QComboBox { background-color: #ffffff; }
-            QGroupBox { background-color: #ffffff; border: 1px solid #c0c0c0; margin-top: 6px; padding-top: 10px; }
+            QLineEdit, QTextEdit, QComboBox { background-color: #ffffff; border: 1px solid #c0c0c0; border-radius: 4px; padding: 2px; }
+            QGroupBox { background-color: #ffffff; border: 1px solid #c0c0c0; border-radius: 6px; margin-top: 6px; padding-top: 10px; }
             QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 3px; }
         """)
 
@@ -804,8 +804,8 @@ class RobotVisionGUI(QMainWindow):
         self.setStyleSheet("""
             * { color: #ffffff; }
             QWidget { background-color: #353535; }
-            QLineEdit, QTextEdit, QComboBox { background-color: #2b2b2b; }
-            QGroupBox { background-color: #3c3c3c; border: 1px solid #555555; margin-top: 6px; padding-top: 10px; }
+            QLineEdit, QTextEdit, QComboBox { background-color: #2b2b2b; border: 1px solid #555555; border-radius: 4px; padding: 2px; }
+            QGroupBox { background-color: #3c3c3c; border: 1px solid #555555; border-radius: 6px; margin-top: 6px; padding-top: 10px; }
             QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 3px; }
         """)
 
