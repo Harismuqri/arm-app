@@ -759,6 +759,17 @@ class RobotVisionGUI(QMainWindow):
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
+        # Theme selection
+        theme_layout = QHBoxLayout()
+        theme_label = QLabel("Theme:")
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItems(["Light Mode", "Dark Mode"])
+        self.theme_combo.currentIndexChanged.connect(self.toggle_theme)
+        theme_layout.addWidget(theme_label)
+        theme_layout.addWidget(self.theme_combo)
+        theme_layout.addStretch()
+        layout.addLayout(theme_layout)
+
         self.info_text = QTextEdit()
         self.info_text.setReadOnly(True)
         self.info_text.setFont(QFont("Courier", 10))
@@ -767,6 +778,122 @@ class RobotVisionGUI(QMainWindow):
         self.update_info_display()
 
         return widget
+
+    def toggle_theme(self, index):
+        """Toggle between light and dark theme"""
+        if index == 0:
+            self.apply_light_theme()
+        else:
+            self.apply_dark_theme()
+
+    def apply_light_theme(self):
+        """Apply light theme to the application"""
+        self.setStyleSheet("""
+            QMainWindow, QWidget {
+                background-color: #f0f0f0;
+                color: #000000;
+            }
+            QGroupBox {
+                background-color: #ffffff;
+                border: 1px solid #cccccc;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+            }
+            QLineEdit, QTextEdit, QComboBox {
+                background-color: #ffffff;
+                border: 1px solid #cccccc;
+                border-radius: 3px;
+                padding: 5px;
+                color: #000000;
+            }
+            QPushButton {
+                background-color: #e0e0e0;
+                border: 1px solid #cccccc;
+                border-radius: 3px;
+                padding: 5px;
+                color: #000000;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+            QTabWidget::pane {
+                border: 1px solid #cccccc;
+                background-color: #ffffff;
+            }
+            QTabBar::tab {
+                background-color: #e0e0e0;
+                border: 1px solid #cccccc;
+                padding: 8px 16px;
+            }
+            QTabBar::tab:selected {
+                background-color: #ffffff;
+            }
+        """)
+
+    def apply_dark_theme(self):
+        """Apply dark theme to the application"""
+        self.setStyleSheet("""
+            QMainWindow, QWidget {
+                background-color: #2b2b2b;
+                color: #ffffff;
+            }
+            QGroupBox {
+                background-color: #3c3c3c;
+                border: 1px solid #555555;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+                color: #ffffff;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+                color: #ffffff;
+            }
+            QLineEdit, QTextEdit, QComboBox {
+                background-color: #3c3c3c;
+                border: 1px solid #555555;
+                border-radius: 3px;
+                padding: 5px;
+                color: #ffffff;
+            }
+            QPushButton {
+                background-color: #4a4a4a;
+                border: 1px solid #555555;
+                border-radius: 3px;
+                padding: 5px;
+                color: #ffffff;
+            }
+            QPushButton:hover {
+                background-color: #5a5a5a;
+            }
+            QTabWidget::pane {
+                border: 1px solid #555555;
+                background-color: #3c3c3c;
+            }
+            QTabBar::tab {
+                background-color: #4a4a4a;
+                border: 1px solid #555555;
+                padding: 8px 16px;
+                color: #ffffff;
+            }
+            QTabBar::tab:selected {
+                background-color: #3c3c3c;
+            }
+            QCheckBox {
+                color: #ffffff;
+            }
+            QLabel {
+                color: #ffffff;
+            }
+        """)
 
     def create_control_panel(self):
         """Create control panel with START/STOP buttons"""
