@@ -850,12 +850,15 @@ class RobotVisionGUI(QMainWindow):
                 font-size: 16px;
                 padding: 10px;
                 border-radius: 4px;
+                border: 2px solid #4CAF50;
             }
             QPushButton:hover {
-                background-color: #45a049;
+                background-color: #66BB6A;
+                border: 2px solid #66BB6A;
             }
             QPushButton:pressed {
-                background-color: #3d8b40;
+                background-color: #2E7D32;
+                border: 2px solid #2E7D32;
             }
         """)
         self.start_btn.clicked.connect(self.start_system)
@@ -869,12 +872,15 @@ class RobotVisionGUI(QMainWindow):
                 font-size: 16px;
                 padding: 10px;
                 border-radius: 4px;
+                border: 2px solid #f44336;
             }
             QPushButton:hover {
-                background-color: #da190b;
+                background-color: #ff6659;
+                border: 2px solid #ff6659;
             }
             QPushButton:pressed {
-                background-color: #c1180a;
+                background-color: #c62828;
+                border: 2px solid #c62828;
             }
         """)
         self.stop_btn.setEnabled(False)
