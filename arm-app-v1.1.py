@@ -790,50 +790,20 @@ class RobotVisionGUI(QMainWindow):
             self.apply_light_theme()
 
     def apply_light_theme(self):
-        """Apply light theme using PyQt6 light palette"""
-        self.setStyleSheet("")
-        app = QApplication.instance()
-        app.setStyle("Fusion")
-
-        light_palette = QPalette()
-        light_palette.setColor(QPalette.ColorRole.Window, QColor(240, 240, 240))
-        light_palette.setColor(QPalette.ColorRole.WindowText, Qt.GlobalColor.black)
-        light_palette.setColor(QPalette.ColorRole.Base, QColor(255, 255, 255))
-        light_palette.setColor(QPalette.ColorRole.AlternateBase, QColor(245, 245, 245))
-        light_palette.setColor(QPalette.ColorRole.ToolTipBase, Qt.GlobalColor.white)
-        light_palette.setColor(QPalette.ColorRole.ToolTipText, Qt.GlobalColor.black)
-        light_palette.setColor(QPalette.ColorRole.Text, Qt.GlobalColor.black)
-        light_palette.setColor(QPalette.ColorRole.Button, QColor(240, 240, 240))
-        light_palette.setColor(QPalette.ColorRole.ButtonText, Qt.GlobalColor.black)
-        light_palette.setColor(QPalette.ColorRole.BrightText, Qt.GlobalColor.red)
-        light_palette.setColor(QPalette.ColorRole.Link, QColor(0, 120, 212))
-        light_palette.setColor(QPalette.ColorRole.Highlight, QColor(0, 120, 212))
-        light_palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.white)
-
-        app.setPalette(light_palette)
+        """Apply light theme using stylesheet"""
+        self.setStyleSheet("""
+            QWidget { background-color: #f0f0f0; color: #000000; }
+            QLineEdit, QTextEdit, QComboBox { background-color: #ffffff; }
+            QGroupBox { background-color: #ffffff; }
+        """)
 
     def apply_dark_theme(self):
-        """Apply dark theme using PyQt6 dark palette"""
-        self.setStyleSheet("")
-        app = QApplication.instance()
-        app.setStyle("Fusion")
-
-        dark_palette = QPalette()
-        dark_palette.setColor(QPalette.ColorRole.Window, QColor(53, 53, 53))
-        dark_palette.setColor(QPalette.ColorRole.WindowText, Qt.GlobalColor.white)
-        dark_palette.setColor(QPalette.ColorRole.Base, QColor(25, 25, 25))
-        dark_palette.setColor(QPalette.ColorRole.AlternateBase, QColor(53, 53, 53))
-        dark_palette.setColor(QPalette.ColorRole.ToolTipBase, Qt.GlobalColor.white)
-        dark_palette.setColor(QPalette.ColorRole.ToolTipText, Qt.GlobalColor.white)
-        dark_palette.setColor(QPalette.ColorRole.Text, Qt.GlobalColor.white)
-        dark_palette.setColor(QPalette.ColorRole.Button, QColor(53, 53, 53))
-        dark_palette.setColor(QPalette.ColorRole.ButtonText, Qt.GlobalColor.white)
-        dark_palette.setColor(QPalette.ColorRole.BrightText, Qt.GlobalColor.red)
-        dark_palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218))
-        dark_palette.setColor(QPalette.ColorRole.Highlight, QColor(42, 130, 218))
-        dark_palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.black)
-
-        app.setPalette(dark_palette)
+        """Apply dark theme using stylesheet"""
+        self.setStyleSheet("""
+            QWidget { background-color: #353535; color: #ffffff; }
+            QLineEdit, QTextEdit, QComboBox { background-color: #2b2b2b; }
+            QGroupBox { background-color: #3c3c3c; }
+        """)
 
     def create_control_panel(self):
         """Create control panel with START/STOP buttons"""
