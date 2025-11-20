@@ -802,7 +802,7 @@ class RobotVisionGUI(QMainWindow):
             QGroupBox { background-color: #ffffff; border: 1px solid #c0c0c0; border-radius: 6px; margin-top: 6px; padding-top: 10px; }
             QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 3px; }
             QTabWidget::pane { border: 1px solid #c0c0c0; border-radius: 4px; background-color: #ffffff; }
-            QTabBar::tab { background-color: #e0e0e0; border: 1px solid #c0c0c0; border-top-left-radius: 4px; border-top-right-radius: 4px; padding: 5px 10px; }
+            QTabBar::tab { background-color: #e0e0e0; border: 1px solid #c0c0c0; border-top-left-radius: 4px; border-top-right-radius: 4px; padding: 3px 8px; }
             QTabBar::tab:selected { background-color: #ffffff; }
         """)
 
