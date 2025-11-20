@@ -793,7 +793,7 @@ class RobotVisionGUI(QMainWindow):
         """Apply light theme using stylesheet"""
         self.setStyleSheet("""
             QWidget { background-color: #f0f0f0; color: #000000; }
-            QLabel { background-color: transparent; }
+            QLabel, QCheckBox { background-color: transparent; }
             QLineEdit, QTextEdit, QComboBox { background-color: #ffffff; }
             QGroupBox { background-color: #ffffff; }
         """)
@@ -802,7 +802,7 @@ class RobotVisionGUI(QMainWindow):
         """Apply dark theme using stylesheet"""
         self.setStyleSheet("""
             QWidget { background-color: #353535; color: #ffffff; }
-            QLabel { background-color: transparent; }
+            QLabel, QCheckBox { background-color: transparent; }
             QLineEdit, QTextEdit, QComboBox { background-color: #2b2b2b; }
             QGroupBox { background-color: #3c3c3c; }
         """)
