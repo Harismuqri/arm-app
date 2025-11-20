@@ -806,6 +806,9 @@ class RobotVisionGUI(QMainWindow):
             QWidget#autoCalContainer, QWidget#manualCalContainer { background-color: transparent; }
             QLineEdit, QTextEdit, QComboBox { background-color: #ffffff; border: 1px solid #c0c0c0; border-radius: 4px; padding: 2px; }
             QLineEdit:read-only, QTextEdit:read-only, QLineEdit:disabled, QTextEdit:disabled { background-color: #e8e8e8; }
+            QPushButton { background-color: #ffffff; border: 1px solid #c0c0c0; border-radius: 4px; padding: 5px 15px; }
+            QPushButton:hover { background-color: #e8e8e8; }
+            QPushButton:pressed { background-color: #d0d0d0; }
             QGroupBox { background-color: #ffffff; border: 1px solid #c0c0c0; border-radius: 6px; margin-top: 6px; padding-top: 10px; }
             QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 3px; }
             QTabWidget::pane { border: 1px solid #c0c0c0; border-radius: 4px; background-color: #ffffff; }
@@ -822,6 +825,9 @@ class RobotVisionGUI(QMainWindow):
             QWidget#autoCalContainer, QWidget#manualCalContainer { background-color: transparent; }
             QLineEdit, QTextEdit, QComboBox { background-color: #2b2b2b; border: 1px solid #555555; border-radius: 4px; padding: 2px; }
             QLineEdit:read-only, QTextEdit:read-only, QLineEdit:disabled, QTextEdit:disabled { background-color: #3c3c3c; }
+            QPushButton { background-color: #3c3c3c; border: 1px solid #555555; border-radius: 4px; padding: 5px 15px; }
+            QPushButton:hover { background-color: #454545; }
+            QPushButton:pressed { background-color: #2b2b2b; }
             QGroupBox { background-color: #3c3c3c; border: 1px solid #555555; border-radius: 6px; margin-top: 6px; padding-top: 10px; }
             QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 3px; }
         """)
