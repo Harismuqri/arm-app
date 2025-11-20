@@ -567,8 +567,10 @@ class RobotVisionGUI(QMainWindow):
         grid_layout.setColumnStretch(5, 1)  # Workspace Y
 
         for row, (corner_code, corner_name) in enumerate(corners):
-            # Label
-            grid_layout.addWidget(QLabel(f"{corner_name} ({corner_code}):"), row, 0)
+            # Label with fixed width
+            label = QLabel(f"{corner_name} ({corner_code}):")
+            label.setFixedWidth(100)
+            grid_layout.addWidget(label, row, 0)
 
             # Pixel inputs
             pixel_x = QLineEdit()
@@ -640,8 +642,10 @@ class RobotVisionGUI(QMainWindow):
         robot_grid_layout.setColumnStretch(5, 1)  # Robot Y
 
         for row, (corner_code, corner_name) in enumerate(robot_corners):
-            # Label
-            robot_grid_layout.addWidget(QLabel(f"{corner_name} ({corner_code}):"), row, 0)
+            # Label with fixed width
+            label = QLabel(f"{corner_name} ({corner_code}):")
+            label.setFixedWidth(100)
+            robot_grid_layout.addWidget(label, row, 0)
 
             # Workspace inputs
             ws_x = QLineEdit()
