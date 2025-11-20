@@ -515,10 +515,14 @@ class RobotVisionGUI(QMainWindow):
         detection_group = QGroupBox("Detection Camera Calibration (Camera → Workspace)")
         detection_layout = QVBoxLayout()
 
-        # Auto calibration button
+        # Auto calibration button - aligned right
         auto_cal_btn = QPushButton("Auto Calibrate (Circle Detection)")
         auto_cal_btn.clicked.connect(self.auto_calibrate_detection)
-        detection_layout.addWidget(auto_cal_btn)
+        auto_cal_btn.setFixedWidth(250)
+        auto_btn_layout = QHBoxLayout()
+        auto_btn_layout.addStretch()
+        auto_btn_layout.addWidget(auto_cal_btn)
+        detection_layout.addLayout(auto_btn_layout)
 
         # Manual calibration option
         manual_detection_label = QLabel("Manual Calibration (4 corners in pixels → workspace mm):")
@@ -569,9 +573,14 @@ class RobotVisionGUI(QMainWindow):
 
         detection_layout.addLayout(grid_layout)
 
+        # Manual calibration button - aligned right
         manual_detection_btn = QPushButton("Manual Detection Calibration")
         manual_detection_btn.clicked.connect(self.apply_manual_detection_calibration)
-        detection_layout.addWidget(manual_detection_btn)
+        manual_detection_btn.setFixedWidth(250)
+        manual_btn_layout = QHBoxLayout()
+        manual_btn_layout.addStretch()
+        manual_btn_layout.addWidget(manual_detection_btn)
+        detection_layout.addLayout(manual_btn_layout)
 
         detection_group.setLayout(detection_layout)
         layout.addWidget(detection_group)
@@ -652,9 +661,14 @@ class RobotVisionGUI(QMainWindow):
         self.robot_cal_inputs['TL']['ws_x'].setText("0")
         self.robot_cal_inputs['TL']['ws_y'].setText("300")
 
+        # Calculate button - aligned right
         calculate_btn = QPushButton("Calculate Robot Transformation")
         calculate_btn.clicked.connect(self.calculate_robot_transformation)
-        robot_layout.addWidget(calculate_btn)
+        calculate_btn.setFixedWidth(250)
+        calc_btn_layout = QHBoxLayout()
+        calc_btn_layout.addStretch()
+        calc_btn_layout.addWidget(calculate_btn)
+        robot_layout.addLayout(calc_btn_layout)
 
         robot_group.setLayout(robot_layout)
         layout.addWidget(robot_group)
