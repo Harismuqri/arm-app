@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                               QPushButton, QGroupBox, QGridLayout, QTextEdit,
                               QCheckBox, QComboBox, QMessageBox, QSizePolicy)
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
-from PyQt6.QtGui import QImage, QPixmap, QFont
+from PyQt6.QtGui import QImage, QPixmap, QFont, QPalette, QColor
 from ultralytics import YOLO
 import PySpin
 
@@ -790,12 +790,35 @@ class RobotVisionGUI(QMainWindow):
             self.apply_light_theme()
 
     def apply_light_theme(self):
-        """Apply light theme using PyQt6 default style"""
+        """Apply light theme using PyQt6 default palette"""
         self.setStyleSheet("")
+        app = QApplication.instance()
+        app.setStyle("Fusion")
+        palette = QPalette()
+        app.setPalette(palette)
 
     def apply_dark_theme(self):
-        """Apply dark theme using PyQt6 default style"""
+        """Apply dark theme using PyQt6 dark palette"""
         self.setStyleSheet("")
+        app = QApplication.instance()
+        app.setStyle("Fusion")
+
+        dark_palette = QPalette()
+        dark_palette.setColor(QPalette.ColorRole.Window, QColor(53, 53, 53))
+        dark_palette.setColor(QPalette.ColorRole.WindowText, Qt.GlobalColor.white)
+        dark_palette.setColor(QPalette.ColorRole.Base, QColor(25, 25, 25))
+        dark_palette.setColor(QPalette.ColorRole.AlternateBase, QColor(53, 53, 53))
+        dark_palette.setColor(QPalette.ColorRole.ToolTipBase, Qt.GlobalColor.white)
+        dark_palette.setColor(QPalette.ColorRole.ToolTipText, Qt.GlobalColor.white)
+        dark_palette.setColor(QPalette.ColorRole.Text, Qt.GlobalColor.white)
+        dark_palette.setColor(QPalette.ColorRole.Button, QColor(53, 53, 53))
+        dark_palette.setColor(QPalette.ColorRole.ButtonText, Qt.GlobalColor.white)
+        dark_palette.setColor(QPalette.ColorRole.BrightText, Qt.GlobalColor.red)
+        dark_palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218))
+        dark_palette.setColor(QPalette.ColorRole.Highlight, QColor(42, 130, 218))
+        dark_palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.black)
+
+        app.setPalette(dark_palette)
 
     def create_control_panel(self):
         """Create control panel with START/STOP buttons"""
