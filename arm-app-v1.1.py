@@ -843,12 +843,40 @@ class RobotVisionGUI(QMainWindow):
         widget.setFixedHeight(50)  # Fixed height (not just maximum)
 
         self.start_btn = QPushButton("START System")
-        self.start_btn.setStyleSheet("background-color: #4CAF50; color: white; font-size: 16px; padding: 10px;")
+        self.start_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                font-size: 16px;
+                padding: 10px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+            }
+        """)
         self.start_btn.clicked.connect(self.start_system)
         layout.addWidget(self.start_btn)
 
         self.stop_btn = QPushButton("STOP System")
-        self.stop_btn.setStyleSheet("background-color: #f44336; color: white; font-size: 16px; padding: 10px;")
+        self.stop_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f44336;
+                color: white;
+                font-size: 16px;
+                padding: 10px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #da190b;
+            }
+            QPushButton:pressed {
+                background-color: #c1180a;
+            }
+        """)
         self.stop_btn.setEnabled(False)
         self.stop_btn.clicked.connect(self.stop_system)
         layout.addWidget(self.stop_btn)
