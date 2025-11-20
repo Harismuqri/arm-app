@@ -535,15 +535,11 @@ class RobotVisionGUI(QMainWindow):
         auto_cal_info.setWordWrap(True)
         auto_cal_layout.addWidget(auto_cal_info)
 
-        # Auto calibration button - aligned right
+        # Auto calibration button - full width
         auto_cal_btn = QPushButton("Calibrate")
         auto_cal_btn.clicked.connect(self.auto_calibrate_detection)
-        auto_cal_btn.setFixedWidth(250)
         auto_cal_btn.setFixedHeight(40)
-        auto_btn_layout = QHBoxLayout()
-        auto_btn_layout.addStretch()
-        auto_btn_layout.addWidget(auto_cal_btn)
-        auto_cal_layout.addLayout(auto_btn_layout)
+        auto_cal_layout.addWidget(auto_cal_btn)
 
         detection_layout.addWidget(self.auto_cal_container)
 
@@ -600,15 +596,11 @@ class RobotVisionGUI(QMainWindow):
 
         manual_cal_layout.addLayout(grid_layout)
 
-        # Manual calibration button - aligned right
+        # Manual calibration button - full width
         manual_detection_btn = QPushButton("Calibrate")
         manual_detection_btn.clicked.connect(self.apply_manual_detection_calibration)
-        manual_detection_btn.setFixedWidth(250)
         manual_detection_btn.setFixedHeight(40)
-        manual_btn_layout = QHBoxLayout()
-        manual_btn_layout.addStretch()
-        manual_btn_layout.addWidget(manual_detection_btn)
-        manual_cal_layout.addLayout(manual_btn_layout)
+        manual_cal_layout.addWidget(manual_detection_btn)
 
         detection_layout.addWidget(self.manual_cal_container)
 
@@ -694,15 +686,11 @@ class RobotVisionGUI(QMainWindow):
         self.robot_cal_inputs['TL']['ws_x'].setText("0")
         self.robot_cal_inputs['TL']['ws_y'].setText("300")
 
-        # Calculate button - aligned right
+        # Calculate button - full width
         calculate_btn = QPushButton("Calculate Robot Transformation")
         calculate_btn.clicked.connect(self.calculate_robot_transformation)
-        calculate_btn.setFixedWidth(250)
         calculate_btn.setFixedHeight(40)
-        calc_btn_layout = QHBoxLayout()
-        calc_btn_layout.addStretch()
-        calc_btn_layout.addWidget(calculate_btn)
-        robot_layout.addLayout(calc_btn_layout)
+        robot_layout.addWidget(calculate_btn)
 
         robot_group.setLayout(robot_layout)
         layout.addWidget(robot_group)
