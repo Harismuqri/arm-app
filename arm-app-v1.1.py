@@ -751,6 +751,7 @@ class RobotVisionGUI(QMainWindow):
         self.detection_info = QTextEdit()
         self.detection_info.setReadOnly(True)
         self.detection_info.setMaximumHeight(100)
+        self.detection_info.setFont(QFont("Segoe UI", 9))
         main_layout.addWidget(self.detection_info)
 
         # Add stretch at bottom to push everything up
@@ -776,7 +777,7 @@ class RobotVisionGUI(QMainWindow):
 
         self.info_text = QTextEdit()
         self.info_text.setReadOnly(True)
-        self.info_text.setFont(QFont("Courier", 10))
+        self.info_text.setFont(QFont("Segoe UI", 9))
         layout.addWidget(self.info_text)
 
         self.update_info_display()
@@ -1513,10 +1514,10 @@ class RobotVisionGUI(QMainWindow):
                 clicked_on_object = True
 
                 # Update detection info text
-                info_text = f"Selected Object {obj_data['id']}:\n"
-                info_text += f"Position: ({obj_data['x_mm']:.1f}, {obj_data['y_mm']:.1f}) mm\n"
-                info_text += f"Angle: {obj_data['angle']:.1f}°, "
-                info_text += f"Size: {obj_data['width']:.1f}x{obj_data['height']:.1f} mm"
+                info_text = f"OBJECT DETECTION | ID: {obj_data['id']}\n"
+                info_text += f"Position (X, Y): {obj_data['x_mm']:.1f} mm, {obj_data['y_mm']:.1f} mm\n"
+                info_text += f"Orientation: {obj_data['angle']:.1f}° | "
+                info_text += f"Dimensions: {obj_data['width']:.1f} mm × {obj_data['height']:.1f} mm"
                 self.detection_info.setText(info_text)
                 break
 
@@ -1541,9 +1542,9 @@ class RobotVisionGUI(QMainWindow):
 
                 if 0 <= click_x_mm <= workspace_width and 0 <= click_y_mm <= workspace_height:
                     # Update detection info text
-                    info_text = f"Clicked Position:\n"
-                    info_text += f"Workspace: ({click_x_mm:.1f}, {click_y_mm:.1f}) mm\n"
-                    info_text += f"Pixel: ({x}, {y})"
+                    info_text = f"WORKSPACE COORDINATES\n"
+                    info_text += f"Position (X, Y): {click_x_mm:.1f} mm, {click_y_mm:.1f} mm\n"
+                    info_text += f"Pixel Coordinates: ({x}, {y})"
                     self.detection_info.setText(info_text)
                 else:
                     self.detection_info.clear()
@@ -1702,55 +1703,50 @@ class RobotVisionGUI(QMainWindow):
         calib_count = sum([1 for cal in [self.H_camera_to_workspace, self.H_workspace_to_robot] if cal is not None])
 
         info = ""
-        info += "╔══════════════════════════════════════════════╗\n"
-        info += "║          IROPO SYSTEM DASHBOARD              ║\n"
-        info += "╠══════════════════════════════════════════════╣\n"
-        info += f"║  Version: 1.4          {datetime.now().strftime('%Y-%m-%d %H:%M')}  ║\n"
-        info += "╚══════════════════════════════════════════════╝\n\n"
+        info += "IROPO INTELLIGENT ROBOT POSITIONING SYSTEM\n"
+        info += f"Version 1.4 | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        info += "─" * 50 + "\n\n"
 
-        # System Status Banner
+        # System Status
+        info += "SYSTEM STATUS\n"
         if self.system_running:
-            info += "  ┌─────────────────────────────┐\n"
-            info += "  │  ▶  SYSTEM RUNNING  🟢     │\n"
-            info += "  └─────────────────────────────┘\n\n"
+            info += "  Operational State: RUNNING\n"
         else:
-            info += "  ┌─────────────────────────────┐\n"
-            info += "  │  ■  SYSTEM STOPPED  🔴     │\n"
-            info += "  └─────────────────────────────┘\n\n"
+            info += "  Operational State: STOPPED\n"
+        info += "\n"
 
         # Camera Status Section
-        info += "  ▸ CAMERA STATUS\n"
-        info += "  ─────────────────────────────────\n"
+        info += "CAMERA DEVICES\n"
+        det_status = "Connected" if self.detection_camera else "Disconnected"
+        info += f"  Detection Camera:   {det_status}\n"
 
-        det_status = "✓ Online" if self.detection_camera else "✗ Offline"
-        det_icon = "📷" if self.detection_camera else "📷"
-        info += f"    {det_icon} Detection Camera    [{det_status}]\n"
-
-        insp_status = "✓ Online" if self.inspection_camera else "✗ Offline"
-        insp_icon = "🔍" if self.inspection_camera else "🔍"
-        info += f"    {insp_icon} Inspection Camera  [{insp_status}]\n\n"
+        insp_status = "Connected" if self.inspection_camera else "Disconnected"
+        info += f"  Inspection Camera:  {insp_status}\n"
+        info += "\n"
 
         # Calibration Status Section
-        info += "  ▸ CALIBRATION STATUS\n"
-        info += "  ─────────────────────────────────\n"
+        info += "CALIBRATION STATUS\n"
+        cam_ws_status = "Configured" if self.H_camera_to_workspace is not None else "Not Configured"
+        info += f"  Camera to Workspace:  {cam_ws_status}\n"
 
-        cam_ws_status = "✓ Loaded" if self.H_camera_to_workspace is not None else "✗ Required"
-        info += f"    🎯 Camera → Workspace  [{cam_ws_status}]\n"
+        ws_robot_status = "Configured" if self.H_workspace_to_robot is not None else "Not Configured"
+        info += f"  Workspace to Robot:   {ws_robot_status}\n"
+        info += "\n"
 
-        ws_robot_status = "✓ Loaded" if self.H_workspace_to_robot is not None else "✗ Required"
-        info += f"    🤖 Workspace → Robot   [{ws_robot_status}]\n\n"
-
-        # Progress Bar
+        # System Readiness
         total_ready = camera_count + calib_count
         max_items = 4
-        progress = int((total_ready / max_items) * 20)
-        bar = "█" * progress + "░" * (20 - progress)
         percent = int((total_ready / max_items) * 100)
 
-        info += "  ▸ READINESS\n"
-        info += "  ─────────────────────────────────\n"
-        info += f"    [{bar}] {percent}%\n"
-        info += f"    {total_ready}/{max_items} components ready\n"
+        info += "SYSTEM READINESS\n"
+        info += f"  Components Ready: {total_ready}/{max_items} ({percent}%)\n"
+
+        if percent == 100:
+            info += f"  Status: All Systems Operational\n"
+        elif percent >= 50:
+            info += f"  Status: Partial Configuration\n"
+        else:
+            info += f"  Status: Requires Configuration\n"
 
         self.info_text.setText(info)
 
