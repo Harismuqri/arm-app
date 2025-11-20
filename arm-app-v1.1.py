@@ -796,6 +796,9 @@ class RobotVisionGUI(QMainWindow):
                 background-color: #f3f3f3;
                 color: #1a1a1a;
             }
+            QMainWindow > QWidget {
+                background-color: #f3f3f3;
+            }
             QWidget {
                 background-color: transparent;
                 color: #1a1a1a;
@@ -979,6 +982,9 @@ class RobotVisionGUI(QMainWindow):
             QMainWindow {
                 background-color: #202020;
                 color: #ffffff;
+            }
+            QMainWindow > QWidget {
+                background-color: #202020;
             }
             QWidget {
                 background-color: transparent;
