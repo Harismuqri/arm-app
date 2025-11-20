@@ -454,6 +454,11 @@ class RobotVisionGUI(QMainWindow):
         self.camera_timer = QTimer()
         self.camera_timer.timeout.connect(self.update_camera_feeds)
 
+        # Timer for info display updates (real-time timestamp)
+        self.info_timer = QTimer()
+        self.info_timer.timeout.connect(self.update_info_display)
+        self.info_timer.start(1000)  # Update every 1 second
+
     def load_config(self, path="config.json"):
         """Load configuration from JSON file"""
         try:
