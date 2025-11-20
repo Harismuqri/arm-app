@@ -876,6 +876,29 @@ class RobotVisionGUI(QMainWindow):
                 background-color: transparent;
                 border: none;
             }
+            QMessageBox {
+                background-color: #f0f0f0;
+            }
+            QMessageBox QLabel {
+                color: #000000;
+                font-size: 12px;
+                padding: 10px;
+            }
+            QMessageBox QPushButton {
+                background-color: #0078d4;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 8px 20px;
+                min-width: 80px;
+                font-size: 12px;
+            }
+            QMessageBox QPushButton:hover {
+                background-color: #1084d8;
+            }
+            QMessageBox QPushButton:pressed {
+                background-color: #006cbd;
+            }
         """)
 
     def apply_dark_theme(self):
@@ -968,6 +991,29 @@ class RobotVisionGUI(QMainWindow):
                 background-color: transparent;
                 border: none;
                 color: #ffffff;
+            }
+            QMessageBox {
+                background-color: #2b2b2b;
+            }
+            QMessageBox QLabel {
+                color: #ffffff;
+                font-size: 12px;
+                padding: 10px;
+            }
+            QMessageBox QPushButton {
+                background-color: #0078d4;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 8px 20px;
+                min-width: 80px;
+                font-size: 12px;
+            }
+            QMessageBox QPushButton:hover {
+                background-color: #1084d8;
+            }
+            QMessageBox QPushButton:pressed {
+                background-color: #006cbd;
             }
         """)
 
