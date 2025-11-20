@@ -1750,57 +1750,51 @@ class RobotVisionGUI(QMainWindow):
 
         info = ""
 
-        # Header Section - Professional Title
-        info += "╔═══════════════════════════════════════════════════════════════════╗\n"
-        info += "║      IROPO INTELLIGENT ROBOT POSITIONING SYSTEM                   ║\n"
-        info += "║      Advanced Vision-Guided Automation Platform                   ║\n"
-        info += "╚═══════════════════════════════════════════════════════════════════╝\n\n"
-        info += f"📋 System Version: 1.4                🕐 Local Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-        info += "━" * 75 + "\n\n"
+        # Header Section
+        info += "\n"
+        info += "  IROPO INTELLIGENT ROBOT POSITIONING SYSTEM\n"
+        info += "  Advanced Vision-Guided Automation Platform\n"
+        info += "\n"
+        info += f"  Version 1.4  •  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        info += "\n"
+        info += "  " + "─" * 68 + "\n\n"
 
         # System Status Section
-        info += "⚙️  SYSTEM OPERATIONAL STATUS\n"
-        info += "┄" * 75 + "\n"
+        info += "  SYSTEM STATUS\n\n"
         if self.system_running:
-            info += "   ● Operational State ───────────── 🟢 RUNNING\n"
-            info += "   ● System Mode ─────────────────── Active Processing\n"
+            info += "    Operational State        RUNNING\n"
+            info += "    System Mode              Active Processing\n"
         else:
-            info += "   ● Operational State ───────────── 🔴 STOPPED\n"
-            info += "   ● System Mode ─────────────────── Standby\n"
+            info += "    Operational State        STOPPED\n"
+            info += "    System Mode              Standby\n"
         info += "\n"
 
         # Camera Devices Section
-        info += "📷 IMAGING SUBSYSTEM STATUS\n"
-        info += "┄" * 75 + "\n"
+        info += "  CAMERA DEVICES\n\n"
 
-        # Detection Camera
         if self.detection_camera:
-            info += "   ✓ Detection Camera ────────────── Connected & Operational\n"
+            info += "    Detection Camera         Connected\n"
         else:
-            info += "   ✗ Detection Camera ────────────── Disconnected\n"
+            info += "    Detection Camera         Disconnected\n"
 
-        # Inspection Camera
         if self.inspection_camera:
-            info += "   ✓ Inspection Camera ───────────── Connected & Operational\n"
+            info += "    Inspection Camera        Connected\n"
         else:
-            info += "   ✗ Inspection Camera ───────────── Disconnected\n"
+            info += "    Inspection Camera        Disconnected\n"
         info += "\n"
 
         # Calibration Status Section
-        info += "🎯 SPATIAL CALIBRATION STATUS\n"
-        info += "┄" * 75 + "\n"
+        info += "  CALIBRATION STATUS\n\n"
 
-        # Camera to Workspace Calibration
         if self.H_camera_to_workspace is not None:
-            info += "   ✓ Camera-to-Workspace Transform ── Calibrated & Active\n"
+            info += "    Camera to Workspace      Configured\n"
         else:
-            info += "   ✗ Camera-to-Workspace Transform ── Awaiting Calibration\n"
+            info += "    Camera to Workspace      Not Configured\n"
 
-        # Workspace to Robot Calibration
         if self.H_workspace_to_robot is not None:
-            info += "   ✓ Workspace-to-Robot Transform ─── Calibrated & Active\n"
+            info += "    Workspace to Robot       Configured\n"
         else:
-            info += "   ✗ Workspace-to-Robot Transform ─── Awaiting Calibration\n"
+            info += "    Workspace to Robot       Not Configured\n"
         info += "\n"
 
         # System Readiness Section
@@ -1808,29 +1802,25 @@ class RobotVisionGUI(QMainWindow):
         max_items = 4
         percent = int((total_ready / max_items) * 100)
 
-        info += "📊 SYSTEM READINESS ASSESSMENT\n"
-        info += "┄" * 75 + "\n"
+        info += "  SYSTEM READINESS\n\n"
 
         # Progress bar visualization
-        filled = int(percent / 10)
-        empty = 10 - filled
+        filled = int(percent / 5)
+        empty = 20 - filled
         progress_bar = "█" * filled + "░" * empty
 
-        info += f"   System Integration Level ──────── [{progress_bar}] {percent}%\n"
-        info += f"   Components Initialized ────────── {total_ready} of {max_items} modules\n"
+        info += f"    Integration Level        [{progress_bar}] {percent}%\n"
+        info += f"    Components Ready         {total_ready} of {max_items}\n\n"
 
         if percent == 100:
-            info += "   Overall Status ────────────────── ✓ All Systems Operational\n"
-            info += "                                      Ready for Production Use\n"
+            info += "    Overall Status           All Systems Operational\n"
         elif percent >= 50:
-            info += "   Overall Status ────────────────── ⚠ Partial Configuration Detected\n"
-            info += "                                      Additional Setup Required\n"
+            info += "    Overall Status           Partial Configuration\n"
         else:
-            info += "   Overall Status ────────────────── ⚠ Configuration Incomplete\n"
-            info += "                                      System Setup Required\n"
+            info += "    Overall Status           Configuration Required\n"
 
-        info += "\n" + "━" * 75 + "\n"
-        info += "💡 Status: Ready for Configuration & Deployment | Configure Calibration to Begin\n"
+        info += "\n"
+        info += "  " + "─" * 68 + "\n"
 
         self.info_text.setText(info)
 
