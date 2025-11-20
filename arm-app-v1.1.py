@@ -531,7 +531,7 @@ class RobotVisionGUI(QMainWindow):
 
         # === Auto Calibration Container ===
         self.auto_cal_container = QWidget()
-        self.auto_cal_container.setStyleSheet("background-color: transparent;")
+        self.auto_cal_container.setObjectName("autoCalContainer")
         auto_cal_layout = QVBoxLayout(self.auto_cal_container)
         auto_cal_layout.setContentsMargins(0, 10, 0, 0)
 
@@ -795,7 +795,8 @@ class RobotVisionGUI(QMainWindow):
         self.setStyleSheet("""
             * { color: #000000; }
             QWidget { background-color: #f0f0f0; }
-            QLabel { background-color: transparent; }
+            QLabel, QCheckBox { background-color: transparent; }
+            QWidget#autoCalContainer { background-color: transparent; }
             QLineEdit, QTextEdit, QComboBox { background-color: #ffffff; border: 1px solid #c0c0c0; border-radius: 4px; padding: 2px; }
             QGroupBox { background-color: #ffffff; border: 1px solid #c0c0c0; border-radius: 6px; margin-top: 6px; padding-top: 10px; }
             QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 3px; }
@@ -806,7 +807,8 @@ class RobotVisionGUI(QMainWindow):
         self.setStyleSheet("""
             * { color: #ffffff; }
             QWidget { background-color: #353535; }
-            QLabel { background-color: transparent; }
+            QLabel, QCheckBox { background-color: transparent; }
+            QWidget#autoCalContainer { background-color: transparent; }
             QLineEdit, QTextEdit, QComboBox { background-color: #2b2b2b; border: 1px solid #555555; border-radius: 4px; padding: 2px; }
             QGroupBox { background-color: #3c3c3c; border: 1px solid #555555; border-radius: 6px; margin-top: 6px; padding-top: 10px; }
             QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 3px; }
