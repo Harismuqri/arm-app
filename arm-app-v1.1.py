@@ -553,6 +553,7 @@ class RobotVisionGUI(QMainWindow):
 
         # === Manual Calibration Container ===
         self.manual_cal_container = QWidget()
+        self.manual_cal_container.setObjectName("manualCalContainer")
         manual_cal_layout = QVBoxLayout(self.manual_cal_container)
         manual_cal_layout.setContentsMargins(0, 10, 0, 0)
 
@@ -797,7 +798,7 @@ class RobotVisionGUI(QMainWindow):
             * { color: #000000; }
             QWidget { background-color: #f0f0f0; }
             QLabel, QCheckBox { background-color: transparent; }
-            QWidget#autoCalContainer { background-color: transparent; }
+            QWidget#autoCalContainer, QWidget#manualCalContainer { background-color: transparent; }
             QLineEdit, QTextEdit, QComboBox { background-color: #ffffff; border: 1px solid #c0c0c0; border-radius: 4px; padding: 2px; }
             QLineEdit:read-only, QTextEdit:read-only, QLineEdit:disabled, QTextEdit:disabled { background-color: #e8e8e8; }
             QGroupBox { background-color: #ffffff; border: 1px solid #c0c0c0; border-radius: 6px; margin-top: 6px; padding-top: 10px; }
@@ -813,7 +814,7 @@ class RobotVisionGUI(QMainWindow):
             * { color: #ffffff; }
             QWidget { background-color: #353535; }
             QLabel, QCheckBox { background-color: transparent; }
-            QWidget#autoCalContainer { background-color: transparent; }
+            QWidget#autoCalContainer, QWidget#manualCalContainer { background-color: transparent; }
             QLineEdit, QTextEdit, QComboBox { background-color: #2b2b2b; border: 1px solid #555555; border-radius: 4px; padding: 2px; }
             QLineEdit:read-only, QTextEdit:read-only, QLineEdit:disabled, QTextEdit:disabled { background-color: #3c3c3c; }
             QGroupBox { background-color: #3c3c3c; border: 1px solid #555555; border-radius: 6px; margin-top: 6px; padding-top: 10px; }
