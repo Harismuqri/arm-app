@@ -535,11 +535,15 @@ class RobotVisionGUI(QMainWindow):
         auto_cal_info.setWordWrap(True)
         auto_cal_layout.addWidget(auto_cal_info)
 
-        # Auto calibration button - full width
+        # Auto calibration button - fixed width left aligned
         auto_cal_btn = QPushButton("Calibrate")
         auto_cal_btn.clicked.connect(self.auto_calibrate_detection)
+        auto_cal_btn.setFixedWidth(100)
         auto_cal_btn.setFixedHeight(40)
-        auto_cal_layout.addWidget(auto_cal_btn)
+        auto_btn_layout = QHBoxLayout()
+        auto_btn_layout.addWidget(auto_cal_btn)
+        auto_btn_layout.addStretch()
+        auto_cal_layout.addLayout(auto_btn_layout)
 
         detection_layout.addWidget(self.auto_cal_container)
 
@@ -567,10 +571,8 @@ class RobotVisionGUI(QMainWindow):
         grid_layout.setColumnStretch(5, 1)  # Workspace Y
 
         for row, (corner_code, corner_name) in enumerate(corners):
-            # Label with fixed width
-            label = QLabel(f"{corner_name} ({corner_code}):")
-            label.setFixedWidth(100)
-            grid_layout.addWidget(label, row, 0)
+            # Label
+            grid_layout.addWidget(QLabel(f"{corner_name} ({corner_code}):"), row, 0)
 
             # Pixel inputs
             pixel_x = QLineEdit()
@@ -598,11 +600,15 @@ class RobotVisionGUI(QMainWindow):
 
         manual_cal_layout.addLayout(grid_layout)
 
-        # Manual calibration button - full width
+        # Manual calibration button - fixed width left aligned
         manual_detection_btn = QPushButton("Calibrate")
         manual_detection_btn.clicked.connect(self.apply_manual_detection_calibration)
+        manual_detection_btn.setFixedWidth(100)
         manual_detection_btn.setFixedHeight(40)
-        manual_cal_layout.addWidget(manual_detection_btn)
+        manual_btn_layout = QHBoxLayout()
+        manual_btn_layout.addWidget(manual_detection_btn)
+        manual_btn_layout.addStretch()
+        manual_cal_layout.addLayout(manual_btn_layout)
 
         detection_layout.addWidget(self.manual_cal_container)
 
@@ -642,10 +648,8 @@ class RobotVisionGUI(QMainWindow):
         robot_grid_layout.setColumnStretch(5, 1)  # Robot Y
 
         for row, (corner_code, corner_name) in enumerate(robot_corners):
-            # Label with fixed width
-            label = QLabel(f"{corner_name} ({corner_code}):")
-            label.setFixedWidth(100)
-            robot_grid_layout.addWidget(label, row, 0)
+            # Label
+            robot_grid_layout.addWidget(QLabel(f"{corner_name} ({corner_code}):"), row, 0)
 
             # Workspace inputs
             ws_x = QLineEdit()
@@ -690,11 +694,15 @@ class RobotVisionGUI(QMainWindow):
         self.robot_cal_inputs['TL']['ws_x'].setText("0")
         self.robot_cal_inputs['TL']['ws_y'].setText("300")
 
-        # Calculate button - full width
-        calculate_btn = QPushButton("Calculate Robot Transformation")
+        # Calculate button - fixed width left aligned
+        calculate_btn = QPushButton("Calculate")
         calculate_btn.clicked.connect(self.calculate_robot_transformation)
+        calculate_btn.setFixedWidth(100)
         calculate_btn.setFixedHeight(40)
-        robot_layout.addWidget(calculate_btn)
+        calc_btn_layout = QHBoxLayout()
+        calc_btn_layout.addWidget(calculate_btn)
+        calc_btn_layout.addStretch()
+        robot_layout.addLayout(calc_btn_layout)
 
         robot_group.setLayout(robot_layout)
         layout.addWidget(robot_group)
