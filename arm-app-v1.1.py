@@ -515,19 +515,45 @@ class RobotVisionGUI(QMainWindow):
         detection_group = QGroupBox("Detection Camera Calibration (Camera → Workspace)")
         detection_layout = QVBoxLayout()
 
+        # Dropdown for calibration mode selection
+        mode_layout = QHBoxLayout()
+        mode_label = QLabel("Calibration Mode:")
+        self.detection_mode_combo = QComboBox()
+        self.detection_mode_combo.addItems(["Auto Calibration (Circle Detection)", "Manual Calibration"])
+        self.detection_mode_combo.currentIndexChanged.connect(self.toggle_detection_calibration_mode)
+        mode_layout.addWidget(mode_label)
+        mode_layout.addWidget(self.detection_mode_combo)
+        mode_layout.addStretch()
+        detection_layout.addLayout(mode_layout)
+
+        # === Auto Calibration Container ===
+        self.auto_cal_container = QWidget()
+        auto_cal_layout = QVBoxLayout(self.auto_cal_container)
+        auto_cal_layout.setContentsMargins(0, 10, 0, 0)
+
+        auto_cal_info = QLabel("Place 4 white circles (20-30mm) at workspace corners, then click calibrate.")
+        auto_cal_info.setWordWrap(True)
+        auto_cal_layout.addWidget(auto_cal_info)
+
         # Auto calibration button - aligned right
-        auto_cal_btn = QPushButton("Auto Calibrate (Circle Detection)")
+        auto_cal_btn = QPushButton("Calibrate")
         auto_cal_btn.clicked.connect(self.auto_calibrate_detection)
         auto_cal_btn.setFixedWidth(250)
         auto_cal_btn.setFixedHeight(40)
         auto_btn_layout = QHBoxLayout()
         auto_btn_layout.addStretch()
         auto_btn_layout.addWidget(auto_cal_btn)
-        detection_layout.addLayout(auto_btn_layout)
+        auto_cal_layout.addLayout(auto_btn_layout)
 
-        # Manual calibration option
-        manual_detection_label = QLabel("Manual Calibration (4 corners in pixels → workspace mm):")
-        detection_layout.addWidget(manual_detection_label)
+        detection_layout.addWidget(self.auto_cal_container)
+
+        # === Manual Calibration Container ===
+        self.manual_cal_container = QWidget()
+        manual_cal_layout = QVBoxLayout(self.manual_cal_container)
+        manual_cal_layout.setContentsMargins(0, 10, 0, 0)
+
+        manual_detection_label = QLabel("Enter 4 corners (pixels → workspace mm):")
+        manual_cal_layout.addWidget(manual_detection_label)
 
         self.detection_cal_inputs = {}
         corners = [
@@ -572,17 +598,22 @@ class RobotVisionGUI(QMainWindow):
                 'mm_x': mm_x, 'mm_y': mm_y
             }
 
-        detection_layout.addLayout(grid_layout)
+        manual_cal_layout.addLayout(grid_layout)
 
         # Manual calibration button - aligned right
-        manual_detection_btn = QPushButton("Manual Detection Calibration")
+        manual_detection_btn = QPushButton("Calibrate")
         manual_detection_btn.clicked.connect(self.apply_manual_detection_calibration)
         manual_detection_btn.setFixedWidth(250)
         manual_detection_btn.setFixedHeight(40)
         manual_btn_layout = QHBoxLayout()
         manual_btn_layout.addStretch()
         manual_btn_layout.addWidget(manual_detection_btn)
-        detection_layout.addLayout(manual_btn_layout)
+        manual_cal_layout.addLayout(manual_btn_layout)
+
+        detection_layout.addWidget(self.manual_cal_container)
+
+        # Initially hide manual calibration (show auto by default)
+        self.manual_cal_container.hide()
 
         detection_group.setLayout(detection_layout)
         layout.addWidget(detection_group)
@@ -759,6 +790,15 @@ class RobotVisionGUI(QMainWindow):
         layout.addWidget(self.stop_btn)
 
         return widget
+
+    def toggle_detection_calibration_mode(self, index):
+        """Toggle between auto and manual detection calibration mode"""
+        if index == 0:  # Auto Calibration
+            self.auto_cal_container.show()
+            self.manual_cal_container.hide()
+        else:  # Manual Calibration
+            self.auto_cal_container.hide()
+            self.manual_cal_container.show()
 
     def toggle_robot_calibration_mode(self, state):
         """Toggle between auto and manual robot calibration mode"""
