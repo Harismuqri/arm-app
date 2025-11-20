@@ -790,30 +790,28 @@ class RobotVisionGUI(QMainWindow):
             self.apply_light_theme()
 
     def apply_light_theme(self):
-        """Apply light theme with borders"""
-        self.setStyleSheet("""
-            QWidget { background-color: #f0f0f0; color: #000000; }
-            QLabel, QCheckBox { background-color: transparent; }
-            QLineEdit, QTextEdit { background-color: #ffffff; border: 1px solid #c0c0c0; }
-            QComboBox { background-color: #ffffff; border: 1px solid #c0c0c0; }
-            QGroupBox { background-color: #ffffff; border: 1px solid #c0c0c0; }
-            QTabWidget::pane { border: 1px solid #c0c0c0; background-color: #ffffff; }
-            QTabBar::tab { background-color: #e0e0e0; border: 1px solid #c0c0c0; padding: 5px 10px; }
-            QTabBar::tab:selected { background-color: #ffffff; }
-        """)
+        """Apply light theme using QPalette for native styling with borders"""
+        self.setStyleSheet("")
+        palette = QPalette()
+        palette.setColor(QPalette.ColorRole.Window, QColor("#f0f0f0"))
+        palette.setColor(QPalette.ColorRole.WindowText, QColor("#000000"))
+        palette.setColor(QPalette.ColorRole.Base, QColor("#ffffff"))
+        palette.setColor(QPalette.ColorRole.Text, QColor("#000000"))
+        palette.setColor(QPalette.ColorRole.Button, QColor("#f0f0f0"))
+        palette.setColor(QPalette.ColorRole.ButtonText, QColor("#000000"))
+        self.setPalette(palette)
 
     def apply_dark_theme(self):
-        """Apply dark theme with borders"""
-        self.setStyleSheet("""
-            QWidget { background-color: #353535; color: #ffffff; }
-            QLabel, QCheckBox { background-color: transparent; }
-            QLineEdit, QTextEdit { background-color: #2b2b2b; border: 1px solid #555555; }
-            QComboBox { background-color: #2b2b2b; border: 1px solid #555555; }
-            QGroupBox { background-color: #3c3c3c; border: 1px solid #555555; }
-            QTabWidget::pane { border: 1px solid #555555; background-color: #3c3c3c; }
-            QTabBar::tab { background-color: #2b2b2b; border: 1px solid #555555; padding: 5px 10px; }
-            QTabBar::tab:selected { background-color: #3c3c3c; }
-        """)
+        """Apply dark theme using QPalette for native styling with borders"""
+        self.setStyleSheet("")
+        palette = QPalette()
+        palette.setColor(QPalette.ColorRole.Window, QColor("#353535"))
+        palette.setColor(QPalette.ColorRole.WindowText, QColor("#ffffff"))
+        palette.setColor(QPalette.ColorRole.Base, QColor("#2b2b2b"))
+        palette.setColor(QPalette.ColorRole.Text, QColor("#ffffff"))
+        palette.setColor(QPalette.ColorRole.Button, QColor("#3c3c3c"))
+        palette.setColor(QPalette.ColorRole.ButtonText, QColor("#ffffff"))
+        self.setPalette(palette)
 
     def create_control_panel(self):
         """Create control panel with START/STOP buttons"""
