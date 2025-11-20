@@ -793,18 +793,18 @@ class RobotVisionGUI(QMainWindow):
         """Apply light theme using stylesheet"""
         self.setStyleSheet("""
             QWidget { background-color: #f0f0f0; color: #000000; }
-            QLabel { background-color: transparent; }
-            QLineEdit, QTextEdit, QComboBox { background-color: #ffffff; }
-            QGroupBox { background-color: #ffffff; }
+            QLabel { background-color: transparent; border: none; }
+            QLineEdit, QTextEdit, QComboBox { background-color: #ffffff; border: 1px solid #cccccc; }
+            QGroupBox { background-color: #ffffff; border: 1px solid #cccccc; }
         """)
 
     def apply_dark_theme(self):
         """Apply dark theme using stylesheet"""
         self.setStyleSheet("""
             QWidget { background-color: #353535; color: #ffffff; }
-            QLabel { background-color: transparent; }
-            QLineEdit, QTextEdit, QComboBox { background-color: #2b2b2b; }
-            QGroupBox { background-color: #3c3c3c; }
+            QLabel { background-color: transparent; border: none; }
+            QLineEdit, QTextEdit, QComboBox { background-color: #2b2b2b; border: 1px solid #555555; }
+            QGroupBox { background-color: #3c3c3c; border: 1px solid #555555; }
         """)
 
     def create_control_panel(self):
