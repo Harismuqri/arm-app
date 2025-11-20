@@ -803,6 +803,11 @@ class RobotVisionGUI(QMainWindow):
         palette.setColor(QPalette.ColorRole.BrightText, QColor("#000000"))
         palette.setColor(QPalette.ColorRole.Highlight, QColor("#0078d4"))
         palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff"))
+        palette.setColor(QPalette.ColorRole.Light, QColor("#ffffff"))
+        palette.setColor(QPalette.ColorRole.Midlight, QColor("#e0e0e0"))
+        palette.setColor(QPalette.ColorRole.Mid, QColor("#a0a0a0"))
+        palette.setColor(QPalette.ColorRole.Dark, QColor("#808080"))
+        palette.setColor(QPalette.ColorRole.Shadow, QColor("#000000"))
         self.setPalette(palette)
 
     def apply_dark_theme(self):
@@ -819,6 +824,11 @@ class RobotVisionGUI(QMainWindow):
         palette.setColor(QPalette.ColorRole.BrightText, QColor("#ffffff"))
         palette.setColor(QPalette.ColorRole.Highlight, QColor("#0078d4"))
         palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff"))
+        palette.setColor(QPalette.ColorRole.Light, QColor("#555555"))
+        palette.setColor(QPalette.ColorRole.Midlight, QColor("#454545"))
+        palette.setColor(QPalette.ColorRole.Mid, QColor("#3c3c3c"))
+        palette.setColor(QPalette.ColorRole.Dark, QColor("#2b2b2b"))
+        palette.setColor(QPalette.ColorRole.Shadow, QColor("#000000"))
         self.setPalette(palette)
 
     def create_control_panel(self):
