@@ -808,7 +808,25 @@ class RobotVisionGUI(QMainWindow):
                 left: 10px;
                 padding: 0 5px;
             }
-            QLineEdit, QTextEdit, QComboBox {
+            QLabel {
+                background-color: transparent;
+                border: none;
+                color: #000000;
+            }
+            QLineEdit {
+                background-color: #ffffff;
+                border: 1px solid #cccccc;
+                border-radius: 3px;
+                padding: 5px;
+                color: #000000;
+            }
+            QTextEdit {
+                background-color: #ffffff;
+                border: none;
+                padding: 5px;
+                color: #000000;
+            }
+            QComboBox {
                 background-color: #ffffff;
                 border: 1px solid #cccccc;
                 border-radius: 3px;
@@ -837,6 +855,10 @@ class RobotVisionGUI(QMainWindow):
             QTabBar::tab:selected {
                 background-color: #ffffff;
             }
+            QCheckBox {
+                background-color: transparent;
+                border: none;
+            }
         """)
 
     def apply_dark_theme(self):
@@ -860,7 +882,25 @@ class RobotVisionGUI(QMainWindow):
                 padding: 0 5px;
                 color: #ffffff;
             }
-            QLineEdit, QTextEdit, QComboBox {
+            QLabel {
+                background-color: transparent;
+                border: none;
+                color: #ffffff;
+            }
+            QLineEdit {
+                background-color: #3c3c3c;
+                border: 1px solid #555555;
+                border-radius: 3px;
+                padding: 5px;
+                color: #ffffff;
+            }
+            QTextEdit {
+                background-color: #3c3c3c;
+                border: none;
+                padding: 5px;
+                color: #ffffff;
+            }
+            QComboBox {
                 background-color: #3c3c3c;
                 border: 1px solid #555555;
                 border-radius: 3px;
@@ -891,9 +931,8 @@ class RobotVisionGUI(QMainWindow):
                 background-color: #3c3c3c;
             }
             QCheckBox {
-                color: #ffffff;
-            }
-            QLabel {
+                background-color: transparent;
+                border: none;
                 color: #ffffff;
             }
         """)
