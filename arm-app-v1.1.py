@@ -833,10 +833,19 @@ class RobotVisionGUI(QMainWindow):
             }
             QComboBox {
                 background-color: #ffffff;
-                border: 1px solid #cccccc;
+                border: 2px solid #999999;
                 border-radius: 3px;
                 padding: 5px;
                 color: #000000;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #ffffff;
+                border: 2px solid #999999;
+                color: #000000;
+                selection-background-color: #d0d0d0;
             }
             QPushButton {
                 background-color: #e0e0e0;
@@ -912,10 +921,19 @@ class RobotVisionGUI(QMainWindow):
             }
             QComboBox {
                 background-color: #3c3c3c;
-                border: 1px solid #555555;
+                border: 2px solid #666666;
                 border-radius: 3px;
                 padding: 5px;
                 color: #ffffff;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #3c3c3c;
+                border: 2px solid #666666;
+                color: #ffffff;
+                selection-background-color: #5a5a5a;
             }
             QPushButton {
                 background-color: #4a4a4a;
