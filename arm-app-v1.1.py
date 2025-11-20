@@ -808,32 +808,30 @@ class RobotVisionGUI(QMainWindow):
             QGroupBox {
                 background-color: #ffffff;
                 border: 1px solid #e5e5e5;
-                border-radius: 8px;
-                margin-top: 12px;
-                padding: 16px;
-                padding-top: 24px;
+                border-radius: 4px;
+                margin-top: 8px;
+                padding: 8px;
+                padding-top: 16px;
                 font-weight: 600;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
-                left: 12px;
-                padding: 0 8px;
+                left: 8px;
+                padding: 0 4px;
                 color: #1a1a1a;
             }
             QLabel {
                 background-color: transparent;
                 border: none;
                 color: #1a1a1a;
-                font-size: 12px;
             }
             QLineEdit {
                 background-color: #ffffff;
                 border: 1px solid #d1d1d1;
                 border-bottom: 2px solid #d1d1d1;
-                border-radius: 4px;
-                padding: 8px 12px;
+                border-radius: 3px;
+                padding: 4px 6px;
                 color: #1a1a1a;
-                font-size: 12px;
             }
             QLineEdit:focus {
                 border-bottom: 2px solid #0078d4;
@@ -847,19 +845,16 @@ class RobotVisionGUI(QMainWindow):
             QTextEdit {
                 background-color: #ffffff;
                 border: 1px solid #d1d1d1;
-                border-radius: 8px;
-                padding: 12px;
+                border-radius: 4px;
+                padding: 6px;
                 color: #1a1a1a;
-                font-size: 12px;
             }
             QComboBox {
                 background-color: #ffffff;
                 border: 1px solid #d1d1d1;
-                border-radius: 4px;
-                padding: 8px 12px;
+                border-radius: 3px;
+                padding: 4px 6px;
                 color: #1a1a1a;
-                font-size: 12px;
-                min-height: 20px;
             }
             QComboBox:hover {
                 background-color: #f9f9f9;
@@ -867,19 +862,18 @@ class RobotVisionGUI(QMainWindow):
             QComboBox QAbstractItemView {
                 background-color: #ffffff;
                 border: 1px solid #e5e5e5;
-                border-radius: 8px;
+                border-radius: 4px;
                 color: #1a1a1a;
                 selection-background-color: #e5f3ff;
                 selection-color: #1a1a1a;
-                padding: 4px;
+                padding: 2px;
             }
             QPushButton {
                 background-color: #ffffff;
                 border: 1px solid #d1d1d1;
-                border-radius: 4px;
-                padding: 8px 16px;
+                border-radius: 3px;
+                padding: 5px 10px;
                 color: #1a1a1a;
-                font-size: 12px;
                 font-weight: 600;
             }
             QPushButton:hover {
@@ -892,18 +886,17 @@ class RobotVisionGUI(QMainWindow):
             }
             QTabWidget::pane {
                 border: 1px solid #e5e5e5;
-                border-radius: 8px;
+                border-radius: 4px;
                 background-color: #ffffff;
                 top: -1px;
             }
             QTabBar::tab {
                 background-color: transparent;
                 border: none;
-                padding: 10px 20px;
-                margin-right: 4px;
+                padding: 6px 12px;
+                margin-right: 2px;
                 color: #5a5a5a;
-                font-size: 12px;
-                border-radius: 4px 4px 0 0;
+                border-radius: 3px 3px 0 0;
             }
             QTabBar::tab:selected {
                 background-color: #ffffff;
@@ -916,27 +909,28 @@ class RobotVisionGUI(QMainWindow):
             QCheckBox {
                 background-color: transparent;
                 border: none;
-                spacing: 8px;
+                spacing: 6px;
             }
             QCheckBox::indicator {
-                width: 20px;
-                height: 20px;
-                border-radius: 4px;
+                width: 16px;
+                height: 16px;
+                border-radius: 3px;
                 border: 2px solid #5a5a5a;
             }
             QCheckBox::indicator:checked {
                 background-color: #0078d4;
                 border-color: #0078d4;
+                image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMiIgaGVpZ2h0PSIxMiIgdmlld0JveD0iMCAwIDEyIDEyIj48cGF0aCBmaWxsPSJ3aGl0ZSIgZD0iTTEwIDNMNCA5IDEgNiIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyIiBmaWxsPSJub25lIi8+PC9zdmc+);
             }
             QScrollBar:vertical {
                 background-color: transparent;
-                width: 12px;
+                width: 10px;
                 margin: 0;
             }
             QScrollBar::handle:vertical {
                 background-color: #c1c1c1;
-                border-radius: 6px;
-                min-height: 30px;
+                border-radius: 5px;
+                min-height: 20px;
                 margin: 2px;
             }
             QScrollBar::handle:vertical:hover {
@@ -950,17 +944,15 @@ class RobotVisionGUI(QMainWindow):
             }
             QMessageBox QLabel {
                 color: #1a1a1a;
-                font-size: 13px;
-                padding: 12px;
+                padding: 8px;
             }
             QMessageBox QPushButton {
                 background-color: #0078d4;
                 color: white;
                 border: none;
-                border-radius: 4px;
-                padding: 8px 24px;
-                min-width: 100px;
-                font-size: 12px;
+                border-radius: 3px;
+                padding: 6px 16px;
+                min-width: 80px;
                 font-weight: 600;
             }
             QMessageBox QPushButton:hover {
@@ -972,7 +964,6 @@ class RobotVisionGUI(QMainWindow):
             QStatusBar {
                 background-color: #f3f3f3;
                 color: #5a5a5a;
-                font-size: 11px;
             }
         """)
 
@@ -995,33 +986,31 @@ class RobotVisionGUI(QMainWindow):
             QGroupBox {
                 background-color: #2d2d2d;
                 border: 1px solid #3d3d3d;
-                border-radius: 8px;
-                margin-top: 12px;
-                padding: 16px;
-                padding-top: 24px;
+                border-radius: 4px;
+                margin-top: 8px;
+                padding: 8px;
+                padding-top: 16px;
                 font-weight: 600;
                 color: #ffffff;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
-                left: 12px;
-                padding: 0 8px;
+                left: 8px;
+                padding: 0 4px;
                 color: #ffffff;
             }
             QLabel {
                 background-color: transparent;
                 border: none;
                 color: #ffffff;
-                font-size: 12px;
             }
             QLineEdit {
                 background-color: #2d2d2d;
                 border: 1px solid #3d3d3d;
                 border-bottom: 2px solid #3d3d3d;
-                border-radius: 4px;
-                padding: 8px 12px;
+                border-radius: 3px;
+                padding: 4px 6px;
                 color: #ffffff;
-                font-size: 12px;
             }
             QLineEdit:focus {
                 border-bottom: 2px solid #60cdff;
@@ -1035,19 +1024,16 @@ class RobotVisionGUI(QMainWindow):
             QTextEdit {
                 background-color: #2d2d2d;
                 border: 1px solid #3d3d3d;
-                border-radius: 8px;
-                padding: 12px;
+                border-radius: 4px;
+                padding: 6px;
                 color: #ffffff;
-                font-size: 12px;
             }
             QComboBox {
                 background-color: #2d2d2d;
                 border: 1px solid #3d3d3d;
-                border-radius: 4px;
-                padding: 8px 12px;
+                border-radius: 3px;
+                padding: 4px 6px;
                 color: #ffffff;
-                font-size: 12px;
-                min-height: 20px;
             }
             QComboBox:hover {
                 background-color: #3a3a3a;
@@ -1055,19 +1041,18 @@ class RobotVisionGUI(QMainWindow):
             QComboBox QAbstractItemView {
                 background-color: #2d2d2d;
                 border: 1px solid #3d3d3d;
-                border-radius: 8px;
+                border-radius: 4px;
                 color: #ffffff;
                 selection-background-color: #0078d4;
                 selection-color: #ffffff;
-                padding: 4px;
+                padding: 2px;
             }
             QPushButton {
                 background-color: #2d2d2d;
                 border: 1px solid #3d3d3d;
-                border-radius: 4px;
-                padding: 8px 16px;
+                border-radius: 3px;
+                padding: 5px 10px;
                 color: #ffffff;
-                font-size: 12px;
                 font-weight: 600;
             }
             QPushButton:hover {
@@ -1080,18 +1065,17 @@ class RobotVisionGUI(QMainWindow):
             }
             QTabWidget::pane {
                 border: 1px solid #3d3d3d;
-                border-radius: 8px;
+                border-radius: 4px;
                 background-color: #2d2d2d;
                 top: -1px;
             }
             QTabBar::tab {
                 background-color: transparent;
                 border: none;
-                padding: 10px 20px;
-                margin-right: 4px;
+                padding: 6px 12px;
+                margin-right: 2px;
                 color: #9d9d9d;
-                font-size: 12px;
-                border-radius: 4px 4px 0 0;
+                border-radius: 3px 3px 0 0;
             }
             QTabBar::tab:selected {
                 background-color: #2d2d2d;
@@ -1104,28 +1088,29 @@ class RobotVisionGUI(QMainWindow):
             QCheckBox {
                 background-color: transparent;
                 border: none;
-                spacing: 8px;
+                spacing: 6px;
                 color: #ffffff;
             }
             QCheckBox::indicator {
-                width: 20px;
-                height: 20px;
-                border-radius: 4px;
+                width: 16px;
+                height: 16px;
+                border-radius: 3px;
                 border: 2px solid #9d9d9d;
             }
             QCheckBox::indicator:checked {
                 background-color: #60cdff;
                 border-color: #60cdff;
+                image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMiIgaGVpZ2h0PSIxMiIgdmlld0JveD0iMCAwIDEyIDEyIj48cGF0aCBmaWxsPSJibGFjayIgZD0iTTEwIDNMNCA5IDEgNiIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSIyIiBmaWxsPSJub25lIi8+PC9zdmc+);
             }
             QScrollBar:vertical {
                 background-color: transparent;
-                width: 12px;
+                width: 10px;
                 margin: 0;
             }
             QScrollBar::handle:vertical {
                 background-color: #5d5d5d;
-                border-radius: 6px;
-                min-height: 30px;
+                border-radius: 5px;
+                min-height: 20px;
                 margin: 2px;
             }
             QScrollBar::handle:vertical:hover {
@@ -1139,17 +1124,15 @@ class RobotVisionGUI(QMainWindow):
             }
             QMessageBox QLabel {
                 color: #ffffff;
-                font-size: 13px;
-                padding: 12px;
+                padding: 8px;
             }
             QMessageBox QPushButton {
                 background-color: #60cdff;
                 color: #000000;
                 border: none;
-                border-radius: 4px;
-                padding: 8px 24px;
-                min-width: 100px;
-                font-size: 12px;
+                border-radius: 3px;
+                padding: 6px 16px;
+                min-width: 80px;
                 font-weight: 600;
             }
             QMessageBox QPushButton:hover {
@@ -1161,7 +1144,6 @@ class RobotVisionGUI(QMainWindow):
             QStatusBar {
                 background-color: #202020;
                 color: #9d9d9d;
-                font-size: 11px;
             }
         """)
 
