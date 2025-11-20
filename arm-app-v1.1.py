@@ -790,46 +790,24 @@ class RobotVisionGUI(QMainWindow):
             self.apply_light_theme()
 
     def apply_light_theme(self):
-        """Apply light theme using QPalette"""
-        self.setStyleSheet("")
-        palette = QPalette()
-        palette.setColor(QPalette.ColorRole.Window, QColor("#f0f0f0"))
-        palette.setColor(QPalette.ColorRole.WindowText, QColor("#000000"))
-        palette.setColor(QPalette.ColorRole.Base, QColor("#ffffff"))
-        palette.setColor(QPalette.ColorRole.AlternateBase, QColor("#e0e0e0"))
-        palette.setColor(QPalette.ColorRole.Text, QColor("#000000"))
-        palette.setColor(QPalette.ColorRole.Button, QColor("#f0f0f0"))
-        palette.setColor(QPalette.ColorRole.ButtonText, QColor("#000000"))
-        palette.setColor(QPalette.ColorRole.BrightText, QColor("#000000"))
-        palette.setColor(QPalette.ColorRole.Highlight, QColor("#0078d4"))
-        palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff"))
-        palette.setColor(QPalette.ColorRole.Light, QColor("#ffffff"))
-        palette.setColor(QPalette.ColorRole.Midlight, QColor("#e0e0e0"))
-        palette.setColor(QPalette.ColorRole.Mid, QColor("#a0a0a0"))
-        palette.setColor(QPalette.ColorRole.Dark, QColor("#808080"))
-        palette.setColor(QPalette.ColorRole.Shadow, QColor("#000000"))
-        self.setPalette(palette)
+        """Apply light theme"""
+        self.setStyleSheet("""
+            * { color: #000000; }
+            QWidget { background-color: #f0f0f0; }
+            QLineEdit, QTextEdit, QComboBox { background-color: #ffffff; }
+            QGroupBox { background-color: #ffffff; border: 1px solid #c0c0c0; margin-top: 6px; padding-top: 10px; }
+            QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 3px; }
+        """)
 
     def apply_dark_theme(self):
-        """Apply dark theme using QPalette"""
-        self.setStyleSheet("")
-        palette = QPalette()
-        palette.setColor(QPalette.ColorRole.Window, QColor("#353535"))
-        palette.setColor(QPalette.ColorRole.WindowText, QColor("#ffffff"))
-        palette.setColor(QPalette.ColorRole.Base, QColor("#2b2b2b"))
-        palette.setColor(QPalette.ColorRole.AlternateBase, QColor("#3c3c3c"))
-        palette.setColor(QPalette.ColorRole.Text, QColor("#ffffff"))
-        palette.setColor(QPalette.ColorRole.Button, QColor("#3c3c3c"))
-        palette.setColor(QPalette.ColorRole.ButtonText, QColor("#ffffff"))
-        palette.setColor(QPalette.ColorRole.BrightText, QColor("#ffffff"))
-        palette.setColor(QPalette.ColorRole.Highlight, QColor("#0078d4"))
-        palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff"))
-        palette.setColor(QPalette.ColorRole.Light, QColor("#555555"))
-        palette.setColor(QPalette.ColorRole.Midlight, QColor("#454545"))
-        palette.setColor(QPalette.ColorRole.Mid, QColor("#3c3c3c"))
-        palette.setColor(QPalette.ColorRole.Dark, QColor("#2b2b2b"))
-        palette.setColor(QPalette.ColorRole.Shadow, QColor("#000000"))
-        self.setPalette(palette)
+        """Apply dark theme"""
+        self.setStyleSheet("""
+            * { color: #ffffff; }
+            QWidget { background-color: #353535; }
+            QLineEdit, QTextEdit, QComboBox { background-color: #2b2b2b; }
+            QGroupBox { background-color: #3c3c3c; border: 1px solid #555555; margin-top: 6px; padding-top: 10px; }
+            QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 3px; }
+        """)
 
     def create_control_panel(self):
         """Create control panel with START/STOP buttons"""
