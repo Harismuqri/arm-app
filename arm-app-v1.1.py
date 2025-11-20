@@ -1847,15 +1847,62 @@ class RobotVisionGUI(QMainWindow):
 
     def update_info_display(self):
         """Update system information display"""
-        info = "=== System Status ===\n\n"
+        from datetime import datetime
 
-        info += f"Detection Camera: {'✓ Initialized' if self.detection_camera else '✗ Not initialized'}\n"
-        info += f"Inspection Camera: {'✓ Initialized' if self.inspection_camera else '✗ Not initialized'}\n\n"
+        # Calculate status counts
+        camera_count = sum([1 for cam in [self.detection_camera, self.inspection_camera] if cam])
+        calib_count = sum([1 for cal in [self.H_camera_to_workspace, self.H_workspace_to_robot] if cal is not None])
 
-        info += f"Camera → Workspace Calibration: {'✓ Loaded' if self.H_camera_to_workspace is not None else '✗ Not calibrated'}\n"
-        info += f"Workspace → Robot Calibration: {'✓ Loaded' if self.H_workspace_to_robot is not None else '✗ Not calibrated'}\n\n"
+        info = ""
+        info += "╔══════════════════════════════════════════════╗\n"
+        info += "║          IROPO SYSTEM DASHBOARD              ║\n"
+        info += "╠══════════════════════════════════════════════╣\n"
+        info += f"║  Version: 1.4          {datetime.now().strftime('%Y-%m-%d %H:%M')}  ║\n"
+        info += "╚══════════════════════════════════════════════╝\n\n"
 
-        info += f"System Status: {'🟢 RUNNING' if self.system_running else '🔴 STOPPED'}\n"
+        # System Status Banner
+        if self.system_running:
+            info += "  ┌─────────────────────────────┐\n"
+            info += "  │  ▶  SYSTEM RUNNING  🟢     │\n"
+            info += "  └─────────────────────────────┘\n\n"
+        else:
+            info += "  ┌─────────────────────────────┐\n"
+            info += "  │  ■  SYSTEM STOPPED  🔴     │\n"
+            info += "  └─────────────────────────────┘\n\n"
+
+        # Camera Status Section
+        info += "  ▸ CAMERA STATUS\n"
+        info += "  ─────────────────────────────────\n"
+
+        det_status = "✓ Online" if self.detection_camera else "✗ Offline"
+        det_icon = "📷" if self.detection_camera else "📷"
+        info += f"    {det_icon} Detection Camera    [{det_status}]\n"
+
+        insp_status = "✓ Online" if self.inspection_camera else "✗ Offline"
+        insp_icon = "🔍" if self.inspection_camera else "🔍"
+        info += f"    {insp_icon} Inspection Camera  [{insp_status}]\n\n"
+
+        # Calibration Status Section
+        info += "  ▸ CALIBRATION STATUS\n"
+        info += "  ─────────────────────────────────\n"
+
+        cam_ws_status = "✓ Loaded" if self.H_camera_to_workspace is not None else "✗ Required"
+        info += f"    🎯 Camera → Workspace  [{cam_ws_status}]\n"
+
+        ws_robot_status = "✓ Loaded" if self.H_workspace_to_robot is not None else "✗ Required"
+        info += f"    🤖 Workspace → Robot   [{ws_robot_status}]\n\n"
+
+        # Progress Bar
+        total_ready = camera_count + calib_count
+        max_items = 4
+        progress = int((total_ready / max_items) * 20)
+        bar = "█" * progress + "░" * (20 - progress)
+        percent = int((total_ready / max_items) * 100)
+
+        info += "  ▸ READINESS\n"
+        info += "  ─────────────────────────────────\n"
+        info += f"    [{bar}] {percent}%\n"
+        info += f"    {total_ready}/{max_items} components ready\n"
 
         self.info_text.setText(info)
 
