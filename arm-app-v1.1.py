@@ -794,8 +794,12 @@ class RobotVisionGUI(QMainWindow):
         self.setStyleSheet("""
             QWidget { background-color: #f0f0f0; color: #000000; }
             QLabel, QCheckBox { background-color: transparent; }
-            QLineEdit, QTextEdit, QComboBox { background-color: #ffffff; }
-            QGroupBox { background-color: #ffffff; }
+            QLineEdit, QTextEdit { background-color: #ffffff; border: 1px solid #c0c0c0; }
+            QComboBox { background-color: #ffffff; border: 1px solid #c0c0c0; }
+            QGroupBox { background-color: #ffffff; border: 1px solid #c0c0c0; }
+            QTabWidget::pane { border: 1px solid #c0c0c0; background-color: #ffffff; }
+            QTabBar::tab { background-color: #e0e0e0; border: 1px solid #c0c0c0; padding: 5px 10px; }
+            QTabBar::tab:selected { background-color: #ffffff; }
         """)
 
     def apply_dark_theme(self):
@@ -803,8 +807,12 @@ class RobotVisionGUI(QMainWindow):
         self.setStyleSheet("""
             QWidget { background-color: #353535; color: #ffffff; }
             QLabel, QCheckBox { background-color: transparent; }
-            QLineEdit, QTextEdit, QComboBox { background-color: #2b2b2b; }
-            QGroupBox { background-color: #3c3c3c; }
+            QLineEdit, QTextEdit { background-color: #2b2b2b; border: 1px solid #555555; }
+            QComboBox { background-color: #2b2b2b; border: 1px solid #555555; }
+            QGroupBox { background-color: #3c3c3c; border: 1px solid #555555; }
+            QTabWidget::pane { border: 1px solid #555555; background-color: #3c3c3c; }
+            QTabBar::tab { background-color: #2b2b2b; border: 1px solid #555555; padding: 5px 10px; }
+            QTabBar::tab:selected { background-color: #3c3c3c; }
         """)
 
     def create_control_panel(self):
