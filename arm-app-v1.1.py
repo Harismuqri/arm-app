@@ -798,7 +798,7 @@ class RobotVisionGUI(QMainWindow):
             QLabel, QCheckBox { background-color: transparent; }
             QWidget#autoCalContainer { background-color: transparent; }
             QLineEdit, QTextEdit, QComboBox { background-color: #ffffff; border: 1px solid #c0c0c0; border-radius: 4px; padding: 2px; }
-            QLineEdit:read-only, QTextEdit:read-only { background-color: #e8e8e8; }
+            QLineEdit:read-only, QTextEdit:read-only, QLineEdit:disabled, QTextEdit:disabled { background-color: #e8e8e8; }
             QGroupBox { background-color: #ffffff; border: 1px solid #c0c0c0; border-radius: 6px; margin-top: 6px; padding-top: 10px; }
             QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 3px; }
         """)
@@ -811,7 +811,7 @@ class RobotVisionGUI(QMainWindow):
             QLabel, QCheckBox { background-color: transparent; }
             QWidget#autoCalContainer { background-color: transparent; }
             QLineEdit, QTextEdit, QComboBox { background-color: #2b2b2b; border: 1px solid #555555; border-radius: 4px; padding: 2px; }
-            QLineEdit:read-only, QTextEdit:read-only { background-color: #3c3c3c; }
+            QLineEdit:read-only, QTextEdit:read-only, QLineEdit:disabled, QTextEdit:disabled { background-color: #3c3c3c; }
             QGroupBox { background-color: #3c3c3c; border: 1px solid #555555; border-radius: 6px; margin-top: 6px; padding-top: 10px; }
             QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 3px; }
         """)
