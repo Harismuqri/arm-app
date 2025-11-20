@@ -825,6 +825,11 @@ class RobotVisionGUI(QMainWindow):
                 padding: 5px;
                 color: #000000;
             }
+            QLineEdit:disabled {
+                background-color: #e0e0e0;
+                border: 1px solid #aaaaaa;
+                color: #888888;
+            }
             QTextEdit {
                 background-color: #ffffff;
                 border: 1px solid #cccccc;
@@ -910,6 +915,11 @@ class RobotVisionGUI(QMainWindow):
                 border-radius: 3px;
                 padding: 5px;
                 color: #ffffff;
+            }
+            QLineEdit:disabled {
+                background-color: #2a2a2a;
+                border: 1px solid #444444;
+                color: #666666;
             }
             QTextEdit {
                 background-color: #3c3c3c;
