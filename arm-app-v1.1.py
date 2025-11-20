@@ -790,12 +790,27 @@ class RobotVisionGUI(QMainWindow):
             self.apply_light_theme()
 
     def apply_light_theme(self):
-        """Apply light theme using PyQt6 default palette"""
+        """Apply light theme using PyQt6 light palette"""
         self.setStyleSheet("")
         app = QApplication.instance()
         app.setStyle("Fusion")
-        palette = QPalette()
-        app.setPalette(palette)
+
+        light_palette = QPalette()
+        light_palette.setColor(QPalette.ColorRole.Window, QColor(240, 240, 240))
+        light_palette.setColor(QPalette.ColorRole.WindowText, Qt.GlobalColor.black)
+        light_palette.setColor(QPalette.ColorRole.Base, QColor(255, 255, 255))
+        light_palette.setColor(QPalette.ColorRole.AlternateBase, QColor(245, 245, 245))
+        light_palette.setColor(QPalette.ColorRole.ToolTipBase, Qt.GlobalColor.white)
+        light_palette.setColor(QPalette.ColorRole.ToolTipText, Qt.GlobalColor.black)
+        light_palette.setColor(QPalette.ColorRole.Text, Qt.GlobalColor.black)
+        light_palette.setColor(QPalette.ColorRole.Button, QColor(240, 240, 240))
+        light_palette.setColor(QPalette.ColorRole.ButtonText, Qt.GlobalColor.black)
+        light_palette.setColor(QPalette.ColorRole.BrightText, Qt.GlobalColor.red)
+        light_palette.setColor(QPalette.ColorRole.Link, QColor(0, 120, 212))
+        light_palette.setColor(QPalette.ColorRole.Highlight, QColor(0, 120, 212))
+        light_palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.white)
+
+        app.setPalette(light_palette)
 
     def apply_dark_theme(self):
         """Apply dark theme using PyQt6 dark palette"""
