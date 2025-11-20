@@ -535,14 +535,14 @@ class RobotVisionGUI(QMainWindow):
         auto_cal_info.setWordWrap(True)
         auto_cal_layout.addWidget(auto_cal_info)
 
-        # Auto calibration button - fixed width left aligned
+        # Auto calibration button - fixed size right aligned
         auto_cal_btn = QPushButton("Calibrate")
         auto_cal_btn.clicked.connect(self.auto_calibrate_detection)
-        auto_cal_btn.setFixedWidth(100)
-        auto_cal_btn.setFixedHeight(40)
+        auto_cal_btn.setFixedWidth(80)
+        auto_cal_btn.setFixedHeight(30)
         auto_btn_layout = QHBoxLayout()
-        auto_btn_layout.addWidget(auto_cal_btn)
         auto_btn_layout.addStretch()
+        auto_btn_layout.addWidget(auto_cal_btn)
         auto_cal_layout.addLayout(auto_btn_layout)
 
         detection_layout.addWidget(self.auto_cal_container)
@@ -600,14 +600,14 @@ class RobotVisionGUI(QMainWindow):
 
         manual_cal_layout.addLayout(grid_layout)
 
-        # Manual calibration button - fixed width left aligned
+        # Manual calibration button - fixed size right aligned
         manual_detection_btn = QPushButton("Calibrate")
         manual_detection_btn.clicked.connect(self.apply_manual_detection_calibration)
-        manual_detection_btn.setFixedWidth(100)
-        manual_detection_btn.setFixedHeight(40)
+        manual_detection_btn.setFixedWidth(80)
+        manual_detection_btn.setFixedHeight(30)
         manual_btn_layout = QHBoxLayout()
-        manual_btn_layout.addWidget(manual_detection_btn)
         manual_btn_layout.addStretch()
+        manual_btn_layout.addWidget(manual_detection_btn)
         manual_cal_layout.addLayout(manual_btn_layout)
 
         detection_layout.addWidget(self.manual_cal_container)
@@ -694,14 +694,14 @@ class RobotVisionGUI(QMainWindow):
         self.robot_cal_inputs['TL']['ws_x'].setText("0")
         self.robot_cal_inputs['TL']['ws_y'].setText("300")
 
-        # Calculate button - fixed width left aligned
+        # Calculate button - fixed size right aligned
         calculate_btn = QPushButton("Calculate")
         calculate_btn.clicked.connect(self.calculate_robot_transformation)
-        calculate_btn.setFixedWidth(100)
-        calculate_btn.setFixedHeight(40)
+        calculate_btn.setFixedWidth(80)
+        calculate_btn.setFixedHeight(30)
         calc_btn_layout = QHBoxLayout()
-        calc_btn_layout.addWidget(calculate_btn)
         calc_btn_layout.addStretch()
+        calc_btn_layout.addWidget(calculate_btn)
         robot_layout.addLayout(calc_btn_layout)
 
         robot_group.setLayout(robot_layout)
