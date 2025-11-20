@@ -447,6 +447,9 @@ class RobotVisionGUI(QMainWindow):
         # Setup UI
         self.init_ui()
 
+        # Apply default theme on startup
+        self.apply_dark_theme()
+
         # Timer for camera updates
         self.camera_timer = QTimer()
         self.camera_timer.timeout.connect(self.update_camera_feeds)
@@ -763,7 +766,7 @@ class RobotVisionGUI(QMainWindow):
         theme_layout = QHBoxLayout()
         theme_label = QLabel("Theme:")
         self.theme_combo = QComboBox()
-        self.theme_combo.addItems(["Light Mode", "Dark Mode"])
+        self.theme_combo.addItems(["Dark Mode", "Light Mode"])
         self.theme_combo.currentIndexChanged.connect(self.toggle_theme)
         theme_layout.addWidget(theme_label)
         theme_layout.addWidget(self.theme_combo)
@@ -780,11 +783,11 @@ class RobotVisionGUI(QMainWindow):
         return widget
 
     def toggle_theme(self, index):
-        """Toggle between light and dark theme"""
+        """Toggle between dark and light theme"""
         if index == 0:
-            self.apply_light_theme()
-        else:
             self.apply_dark_theme()
+        else:
+            self.apply_light_theme()
 
     def apply_light_theme(self):
         """Apply light theme to the application"""
