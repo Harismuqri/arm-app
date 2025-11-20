@@ -792,9 +792,14 @@ class RobotVisionGUI(QMainWindow):
     def apply_light_theme(self):
         """Apply light theme to the application"""
         self.setStyleSheet("""
-            QMainWindow, QWidget {
+            QMainWindow {
                 background-color: #f0f0f0;
                 color: #000000;
+            }
+            QWidget {
+                background-color: transparent;
+                color: #000000;
+                border: none;
             }
             QGroupBox {
                 background-color: #ffffff;
@@ -864,9 +869,14 @@ class RobotVisionGUI(QMainWindow):
     def apply_dark_theme(self):
         """Apply dark theme to the application"""
         self.setStyleSheet("""
-            QMainWindow, QWidget {
+            QMainWindow {
                 background-color: #2b2b2b;
                 color: #ffffff;
+            }
+            QWidget {
+                background-color: transparent;
+                color: #ffffff;
+                border: none;
             }
             QGroupBox {
                 background-color: #3c3c3c;
