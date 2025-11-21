@@ -1,6 +1,6 @@
 """
 Coordinate Testing Tool
-Allows manual input of X,Y coordinates to visualize position on camera view
+Allows manual input of X,Y coordinates to visualize position and send gripper to location
 """
 
 import sys
@@ -8,6 +8,9 @@ import cv2
 import numpy as np
 import json
 import os
+import time
+import struct
+from multiprocessing import shared_memory
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                               QHBoxLayout, QLabel, QLineEdit, QPushButton,
                               QGroupBox, QGridLayout)
@@ -16,20 +19,95 @@ from PyQt6.QtGui import QImage, QPixmap, QFont, QColor
 import PySpin
 
 
+class ClickDataManager:
+    """Manages shared memory for sending coordinates to robot"""
+
+    def __init__(self, name="ClickData", size=512):
+        self.name = name
+        self.size = size
+        self.shm = None
+        self._initialize_shared_memory()
+
+    def _initialize_shared_memory(self):
+        """Create or attach to existing shared memory."""
+        try:
+            self.shm = shared_memory.SharedMemory(name=self.name, create=False)
+            self._read_data()
+        except FileNotFoundError:
+            try:
+                self.shm = shared_memory.SharedMemory(name=self.name, create=True, size=self.size)
+                self._write_data({"click_x": 0, "click_y": 0, "timestamp": 0, "processed": True, "button": "none", "angle": 0.0})
+            except Exception as e:
+                print(f"[ERROR] Failed to create shared memory: {e}")
+                raise
+
+    def _write_data(self, data):
+        """Write data to shared memory as JSON."""
+        try:
+            json_str = json.dumps(data)
+            json_bytes = json_str.encode('utf-8')
+
+            if len(json_bytes) > self.size - 4:
+                print(f"[ERROR] Data too large: {len(json_bytes)} > {self.size-4}")
+                return False
+
+            self.shm.buf[:4] = struct.pack('I', len(json_bytes))
+            self.shm.buf[4:4+len(json_bytes)] = json_bytes
+            return True
+        except Exception as e:
+            print(f"[ERROR] Failed to write click data: {e}")
+            return False
+
+    def _read_data(self):
+        """Read data from shared memory."""
+        try:
+            length = struct.unpack('I', bytes(self.shm.buf[:4]))[0]
+            if length == 0 or length > self.size - 4:
+                return {"click_x": 0, "click_y": 0, "timestamp": 0, "processed": True, "button": "none", "angle": 0.0}
+
+            json_bytes = bytes(self.shm.buf[4:4+length])
+            json_str = json_bytes.decode('utf-8')
+            return json.loads(json_str)
+        except Exception as e:
+            print(f"[ERROR] Failed to read click data: {e}")
+            return None
+
+    def send_coordinate(self, x_mm, y_mm, angle=0.0):
+        """Send coordinate to robot via shared memory"""
+        data = {
+            "click_x": float(x_mm),
+            "click_y": float(y_mm),
+            "timestamp": time.time(),
+            "processed": False,
+            "button": "left",
+            "angle": float(angle)
+        }
+        return self._write_data(data)
+
+    def cleanup(self):
+        """Clean up shared memory."""
+        if self.shm:
+            try:
+                self.shm.close()
+            except:
+                pass
+
+
 class CoordinateTester(QMainWindow):
     """Simple tool to test coordinates by showing dots on camera"""
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Coordinate Testing Tool")
-        self.setGeometry(100, 100, 1000, 700)
+        self.setWindowTitle("Coordinate Testing Tool with Robot Control")
+        self.setGeometry(100, 100, 1400, 800)
 
         # Load configuration
         self.config = self.load_config()
 
-        # Camera
+        # Cameras
         self.system = None
         self.detection_camera = None
+        self.inspection_camera = None
 
         # Calibration matrix
         self.H_camera_to_workspace = None
@@ -38,13 +116,21 @@ class CoordinateTester(QMainWindow):
         # Test points to display
         self.test_points = []  # List of (x_mm, y_mm) tuples
 
+        # Robot control
+        self.click_data_mgr = None
+        try:
+            self.click_data_mgr = ClickDataManager(name="ClickData", size=512)
+            print("[INFO] Connected to robot control shared memory")
+        except Exception as e:
+            print(f"[WARNING] Could not connect to robot control: {e}")
+
         self.init_ui()
-        self.init_camera()
+        self.init_cameras()
         self.load_calibration()
 
         # Start camera timer
         self.timer = QTimer()
-        self.timer.timeout.connect(self.update_camera)
+        self.timer.timeout.connect(self.update_cameras)
         self.timer.start(33)  # ~30 FPS
 
     def load_config(self):
@@ -106,6 +192,11 @@ class CoordinateTester(QMainWindow):
         self.add_btn.clicked.connect(self.add_point)
         btn_layout.addWidget(self.add_btn)
 
+        self.send_robot_btn = QPushButton("Send to Robot")
+        self.send_robot_btn.clicked.connect(self.send_to_robot)
+        self.send_robot_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+        btn_layout.addWidget(self.send_robot_btn)
+
         self.clear_btn = QPushButton("Clear All")
         self.clear_btn.clicked.connect(self.clear_points)
         btn_layout.addWidget(self.clear_btn)
@@ -120,35 +211,65 @@ class CoordinateTester(QMainWindow):
         self.status_label.setFont(QFont("Arial", 10))
         layout.addWidget(self.status_label)
 
-        # Camera view
-        self.camera_label = QLabel()
-        self.camera_label.setMinimumSize(800, 600)
-        self.camera_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.camera_label.setStyleSheet("border: 2px solid #555; background-color: #2a2a2a;")
-        layout.addWidget(self.camera_label)
+        # Camera views - side by side
+        cameras_layout = QHBoxLayout()
+
+        # Detection camera view
+        det_group = QGroupBox("Detection Camera (Workspace View)")
+        det_layout = QVBoxLayout()
+        self.detection_label = QLabel()
+        self.detection_label.setMinimumSize(640, 480)
+        self.detection_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.detection_label.setStyleSheet("border: 2px solid #555; background-color: #2a2a2a;")
+        det_layout.addWidget(self.detection_label)
+        det_group.setLayout(det_layout)
+        cameras_layout.addWidget(det_group)
+
+        # Inspection camera view
+        insp_group = QGroupBox("Inspection Camera (Gripper View)")
+        insp_layout = QVBoxLayout()
+        self.inspection_label = QLabel()
+        self.inspection_label.setMinimumSize(640, 480)
+        self.inspection_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.inspection_label.setStyleSheet("border: 2px solid #555; background-color: #2a2a2a;")
+        insp_layout.addWidget(self.inspection_label)
+        insp_group.setLayout(insp_layout)
+        cameras_layout.addWidget(insp_group)
+
+        layout.addLayout(cameras_layout)
 
         # Info label
-        self.info_label = QLabel("Enter coordinates and click 'Add Point' to visualize")
+        self.info_label = QLabel("Enter coordinates and click 'Send to Robot' to move gripper")
         self.info_label.setFont(QFont("Arial", 9))
         self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.info_label)
 
-    def init_camera(self):
-        """Initialize FLIR camera"""
+    def init_cameras(self):
+        """Initialize both detection and inspection cameras"""
         try:
             self.system = PySpin.System.GetInstance()
             cam_list = self.system.GetCameras()
 
-            if cam_list.GetSize() > 0:
+            if cam_list.GetSize() >= 1:
                 # Get first camera (detection camera)
-                self.detection_camera = cam_list[0]
+                self.detection_camera = cam_list.GetByIndex(0)
                 self.detection_camera.Init()
                 self.detection_camera.AcquisitionMode.SetValue(PySpin.AcquisitionMode_Continuous)
                 self.detection_camera.BeginAcquisition()
-                self.status_label.setText("Status: Camera connected ✓")
-                print("[INFO] Camera initialized successfully")
+                print("[INFO] Detection camera initialized")
+
+            if cam_list.GetSize() >= 2:
+                # Get second camera (inspection camera)
+                self.inspection_camera = cam_list.GetByIndex(1)
+                self.inspection_camera.Init()
+                self.inspection_camera.AcquisitionMode.SetValue(PySpin.AcquisitionMode_Continuous)
+                self.inspection_camera.BeginAcquisition()
+                print("[INFO] Inspection camera initialized")
+                self.status_label.setText("Status: Both cameras connected ✓")
+            elif cam_list.GetSize() == 1:
+                self.status_label.setText("Status: Detection camera connected (inspection camera not found)")
             else:
-                self.status_label.setText("Status: No camera detected")
+                self.status_label.setText("Status: No cameras detected")
                 print("[WARNING] No cameras found")
                 self.show_no_camera_message()
         except Exception as e:
@@ -177,12 +298,13 @@ class CoordinateTester(QMainWindow):
         cv2.putText(placeholder, "3. Restart this tool", (180, 370),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
 
-        # Display placeholder
+        # Display placeholder on both labels
         h, w, ch = placeholder.shape
         bytes_per_line = ch * w
         qt_image = QImage(placeholder.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
         pixmap = QPixmap.fromImage(qt_image.rgbSwapped())
-        self.camera_label.setPixmap(pixmap)
+        self.detection_label.setPixmap(pixmap)
+        self.inspection_label.setPixmap(pixmap)
 
     def add_point(self):
         """Add a test point from input fields"""
@@ -214,115 +336,129 @@ class CoordinateTester(QMainWindow):
         self.test_points.clear()
         self.info_label.setText("All points cleared")
 
-    def update_camera(self):
-        """Update camera display with test points"""
-        if not self.detection_camera:
-            return
-
+    def send_to_robot(self):
+        """Send coordinates to robot via shared memory"""
         try:
-            # Get image from camera
-            image_result = self.detection_camera.GetNextImage(1000)
+            x_mm = float(self.x_input.text())
+            y_mm = float(self.y_input.text())
 
-            if image_result.IsIncomplete():
+            if self.click_data_mgr is None:
+                self.info_label.setText("✗ Error: Robot control not connected")
                 return
 
-            # Convert to OpenCV format
-            width = image_result.GetWidth()
-            height = image_result.GetHeight()
-            image_data = image_result.GetNDArray()
-
-            # Handle different pixel formats
-            if len(image_data.shape) == 2:
-                # Grayscale image
-                frame = cv2.cvtColor(image_data, cv2.COLOR_GRAY2BGR)
-            elif len(image_data.shape) == 3:
-                # Already RGB/BGR - make a writable copy
-                frame = image_data.copy()
+            # Send coordinate to robot
+            if self.click_data_mgr.send_coordinate(x_mm, y_mm):
+                self.info_label.setText(f"✓ Sent to robot: ({x_mm:.1f}, {y_mm:.1f}) mm")
+                print(f"[INFO] Sent coordinates to robot: ({x_mm:.1f}, {y_mm:.1f})")
             else:
-                # Unknown format
-                image_result.Release()
-                return
+                self.info_label.setText("✗ Error: Failed to send to robot")
 
-            image_result.Release()
+        except ValueError:
+            self.info_label.setText("✗ Error: Please enter valid numbers for X and Y")
 
-            # Draw test points
-            if self.H_workspace_to_camera is not None:
-                for x_mm, y_mm in self.test_points:
-                    # Convert workspace coordinates to camera pixel coordinates
-                    workspace_pt = np.array([[[x_mm, y_mm]]], dtype=np.float32)
-                    camera_pt = cv2.perspectiveTransform(workspace_pt, self.H_workspace_to_camera)
+    def update_cameras(self):
+        """Update both camera displays"""
+        # Update detection camera
+        if self.detection_camera:
+            try:
+                image_result = self.detection_camera.GetNextImage(1000)
+                if not image_result.IsIncomplete():
+                    # Convert to OpenCV format
+                    width = image_result.GetWidth()
+                    height = image_result.GetHeight()
+                    image_data = image_result.GetNDArray()
 
-                    px = int(camera_pt[0][0][0])
-                    py = int(camera_pt[0][0][1])
+                    # Handle different pixel formats
+                    if len(image_data.shape) == 2:
+                        frame = cv2.cvtColor(image_data, cv2.COLOR_GRAY2BGR)
+                    elif len(image_data.shape) == 3:
+                        frame = image_data.copy()
+                    else:
+                        image_result.Release()
+                        return
 
-                    # Check if point is within image bounds
-                    if 0 <= px < width and 0 <= py < height:
-                        # Draw only center point (red dot)
-                        cv2.circle(frame, (px, py), 3, (0, 0, 255), -1, cv2.LINE_AA)
+                    image_result.Release()
 
-                        # Draw label with background for readability
-                        workspace_label = f"({x_mm:.1f}, {y_mm:.1f}) mm"
+                    # Draw test points
+                    if self.H_workspace_to_camera is not None:
+                        for x_mm, y_mm in self.test_points:
+                            workspace_pt = np.array([[[x_mm, y_mm]]], dtype=np.float32)
+                            camera_pt = cv2.perspectiveTransform(workspace_pt, self.H_workspace_to_camera)
 
-                        # Position label
-                        label_x = px + 10
-                        label_y = py - 10
+                            px = int(camera_pt[0][0][0])
+                            py = int(camera_pt[0][0][1])
 
-                        # Draw background rectangle for label
-                        (w, h), _ = cv2.getTextSize(workspace_label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                        cv2.rectangle(frame, (label_x - 2, label_y - h - 2),
-                                     (label_x + w + 2, label_y + 2), (0, 0, 0), -1)
+                            if 0 <= px < width and 0 <= py < height:
+                                cv2.circle(frame, (px, py), 3, (0, 0, 255), -1, cv2.LINE_AA)
+                                workspace_label = f"({x_mm:.1f}, {y_mm:.1f}) mm"
+                                label_x = px + 10
+                                label_y = py - 10
+                                (w, h), _ = cv2.getTextSize(workspace_label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                                cv2.rectangle(frame, (label_x - 2, label_y - h - 2),
+                                             (label_x + w + 2, label_y + 2), (0, 0, 0), -1)
+                                cv2.putText(frame, workspace_label, (label_x, label_y),
+                                          cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
 
-                        # Draw label
-                        cv2.putText(frame, workspace_label, (label_x, label_y),
-                                  cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
+                        # Draw workspace boundary
+                        workspace_width = self.config.get("workspace", {}).get("width", 300)
+                        workspace_height = self.config.get("workspace", {}).get("height", 300)
+                        workspace_corners = np.array([
+                            [[0, 0]], [[workspace_width, 0]],
+                            [[workspace_width, workspace_height]], [[0, workspace_height]]
+                        ], dtype=np.float32)
+                        camera_corners = cv2.perspectiveTransform(workspace_corners, self.H_workspace_to_camera)
+                        camera_corners = camera_corners.astype(np.int32)
+                        cv2.polylines(frame, [camera_corners], isClosed=True, color=(0, 255, 255), thickness=2)
 
-            # Draw workspace boundary if calibration exists
-            if self.H_workspace_to_camera is not None:
-                workspace_width = self.config.get("workspace", {}).get("width", 300)
-                workspace_height = self.config.get("workspace", {}).get("height", 300)
+                    # Display detection camera
+                    h, w, ch = frame.shape
+                    qt_image = QImage(frame.data, w, h, ch * w, QImage.Format.Format_RGB888)
+                    pixmap = QPixmap.fromImage(qt_image.rgbSwapped())
+                    scaled_pixmap = pixmap.scaled(self.detection_label.size(),
+                                                 Qt.AspectRatioMode.KeepAspectRatio,
+                                                 Qt.TransformationMode.SmoothTransformation)
+                    self.detection_label.setPixmap(scaled_pixmap)
+            except Exception as e:
+                error_msg = str(e)
+                if "Spinnaker" not in error_msg and "timeout" not in error_msg.lower():
+                    print(f"[ERROR] Detection camera update failed: {error_msg}")
 
-                # Define workspace corners
-                workspace_corners = np.array([
-                    [[0, 0]],
-                    [[workspace_width, 0]],
-                    [[workspace_width, workspace_height]],
-                    [[0, workspace_height]]
-                ], dtype=np.float32)
+        # Update inspection camera
+        if self.inspection_camera:
+            try:
+                image_result = self.inspection_camera.GetNextImage(1000)
+                if not image_result.IsIncomplete():
+                    image_data = image_result.GetNDArray()
 
-                # Transform to camera coordinates
-                camera_corners = cv2.perspectiveTransform(workspace_corners, self.H_workspace_to_camera)
-                camera_corners = camera_corners.astype(np.int32)
+                    # Handle different pixel formats
+                    if len(image_data.shape) == 2:
+                        frame = cv2.cvtColor(image_data, cv2.COLOR_GRAY2BGR)
+                    elif len(image_data.shape) == 3:
+                        frame = image_data.copy()
+                    else:
+                        image_result.Release()
+                        return
 
-                # Draw workspace boundary
-                cv2.polylines(frame, [camera_corners], isClosed=True,
-                            color=(0, 255, 255), thickness=2)
+                    image_result.Release()
 
-            # Convert to Qt format and display
-            h, w, ch = frame.shape
-            bytes_per_line = ch * w
-            qt_image = QImage(frame.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
-            pixmap = QPixmap.fromImage(qt_image.rgbSwapped())
-
-            # Scale to fit label while maintaining aspect ratio
-            scaled_pixmap = pixmap.scaled(self.camera_label.size(),
-                                         Qt.AspectRatioMode.KeepAspectRatio,
-                                         Qt.TransformationMode.SmoothTransformation)
-            self.camera_label.setPixmap(scaled_pixmap)
-
-        except Exception as e:
-            # Log errors but don't crash
-            error_msg = str(e)
-            if "Spinnaker" in error_msg or "timeout" in error_msg.lower():
-                # Camera-specific errors - these are expected sometimes
-                pass
-            else:
-                # Unexpected errors - print for debugging
-                print(f"[ERROR] Camera update failed: {error_msg}")
+                    # Display inspection camera
+                    h, w, ch = frame.shape
+                    qt_image = QImage(frame.data, w, h, ch * w, QImage.Format.Format_RGB888)
+                    pixmap = QPixmap.fromImage(qt_image.rgbSwapped())
+                    scaled_pixmap = pixmap.scaled(self.inspection_label.size(),
+                                                 Qt.AspectRatioMode.KeepAspectRatio,
+                                                 Qt.TransformationMode.SmoothTransformation)
+                    self.inspection_label.setPixmap(scaled_pixmap)
+            except Exception as e:
+                error_msg = str(e)
+                if "Spinnaker" not in error_msg and "timeout" not in error_msg.lower():
+                    print(f"[ERROR] Inspection camera update failed: {error_msg}")
 
     def closeEvent(self, event):
         """Clean up when closing"""
         self.timer.stop()
 
+        # Clean up detection camera
         if self.detection_camera:
             try:
                 self.detection_camera.EndAcquisition()
@@ -330,9 +466,25 @@ class CoordinateTester(QMainWindow):
             except:
                 pass
 
+        # Clean up inspection camera
+        if self.inspection_camera:
+            try:
+                self.inspection_camera.EndAcquisition()
+                self.inspection_camera.DeInit()
+            except:
+                pass
+
+        # Clean up camera system
         if self.system:
             try:
                 self.system.ReleaseInstance()
+            except:
+                pass
+
+        # Clean up shared memory
+        if self.click_data_mgr:
+            try:
+                self.click_data_mgr.cleanup()
             except:
                 pass
 
