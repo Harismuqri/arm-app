@@ -912,8 +912,8 @@ class XArmController:
                 angle_rad = math.radians(default_angle_norm)
                 default_offset_x = offset_magnitude * math.cos(angle_rad)
                 default_offset_y = offset_magnitude * math.sin(angle_rad)
-                default_gripper_x = target_det_x + default_offset_x
-                default_gripper_y = target_det_y + default_offset_y
+                default_gripper_x = target_det_x - default_offset_x
+                default_gripper_y = target_det_y - default_offset_y
                 
                 in_workspace = (workspace_min_x <= default_gripper_x <= workspace_max_x and
                                workspace_min_y <= default_gripper_y <= workspace_max_y)
@@ -941,10 +941,10 @@ class XArmController:
                     angle_rad = math.radians(test_angle_norm)
                     test_offset_x = offset_magnitude * math.cos(angle_rad)
                     test_offset_y = offset_magnitude * math.sin(angle_rad)
-                    
+
                     # Calculate gripper position
-                    test_gripper_x = target_det_x + test_offset_x
-                    test_gripper_y = target_det_y + test_offset_y
+                    test_gripper_x = target_det_x - test_offset_x
+                    test_gripper_y = target_det_y - test_offset_y
                     
                     # Check if this position is in workspace
                     in_workspace = (workspace_min_x <= test_gripper_x <= workspace_max_x and
@@ -978,8 +978,8 @@ class XArmController:
                     angle_rad = math.radians(test_angle_norm)
                     test_offset_x = offset_magnitude * math.cos(angle_rad)
                     test_offset_y = offset_magnitude * math.sin(angle_rad)
-                    test_gripper_x = target_det_x + test_offset_x
-                    test_gripper_y = target_det_y + test_offset_y
+                    test_gripper_x = target_det_x - test_offset_x
+                    test_gripper_y = target_det_y - test_offset_y
                     
                     dist = math.sqrt((test_gripper_x - center_x)**2 + (test_gripper_y - center_y)**2)
                     if dist < best_dist:
