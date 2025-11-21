@@ -257,18 +257,58 @@ class CoordinateTester(QMainWindow):
 
                     # Check if point is within image bounds
                     if 0 <= px < width and 0 <= py < height:
-                        # Draw large red circle
-                        cv2.circle(frame, (px, py), 15, (0, 0, 255), -1)
-                        # Draw white outline
-                        cv2.circle(frame, (px, py), 15, (255, 255, 255), 2)
-                        # Draw crosshair
-                        cv2.drawMarker(frame, (px, py), (255, 255, 255),
-                                     cv2.MARKER_CROSS, 30, 2)
+                        # Draw precise crosshair lines (thin and accurate)
+                        line_length = 40
+                        cv2.line(frame, (px - line_length, py), (px + line_length, py),
+                                (0, 255, 0), 1, cv2.LINE_AA)  # Horizontal - green
+                        cv2.line(frame, (px, py - line_length), (px, py + line_length),
+                                (0, 255, 0), 1, cv2.LINE_AA)  # Vertical - green
 
-                        # Draw coordinate label
-                        label = f"({x_mm:.1f}, {y_mm:.1f})"
-                        cv2.putText(frame, label, (px + 20, py - 20),
-                                  cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                        # Draw concentric circles for precision
+                        cv2.circle(frame, (px, py), 3, (0, 0, 255), -1, cv2.LINE_AA)  # Center dot - red
+                        cv2.circle(frame, (px, py), 8, (255, 255, 0), 2, cv2.LINE_AA)  # Inner ring - cyan
+                        cv2.circle(frame, (px, py), 15, (0, 255, 255), 2, cv2.LINE_AA)  # Outer ring - yellow
+                        cv2.circle(frame, (px, py), 25, (255, 255, 255), 1, cv2.LINE_AA)  # Reference ring - white
+
+                        # Draw tick marks at cardinal directions for alignment reference
+                        tick_length = 5
+                        tick_offset = 30
+                        # Top tick
+                        cv2.line(frame, (px, py - tick_offset - tick_length),
+                                (px, py - tick_offset + tick_length), (255, 255, 255), 2, cv2.LINE_AA)
+                        # Bottom tick
+                        cv2.line(frame, (px, py + tick_offset - tick_length),
+                                (px, py + tick_offset + tick_length), (255, 255, 255), 2, cv2.LINE_AA)
+                        # Left tick
+                        cv2.line(frame, (px - tick_offset - tick_length, py),
+                                (px - tick_offset + tick_length, py), (255, 255, 255), 2, cv2.LINE_AA)
+                        # Right tick
+                        cv2.line(frame, (px + tick_offset - tick_length, py),
+                                (px + tick_offset + tick_length, py), (255, 255, 255), 2, cv2.LINE_AA)
+
+                        # Draw detailed labels with background for readability
+                        workspace_label = f"WS: ({x_mm:.1f}, {y_mm:.1f}) mm"
+                        pixel_label = f"PX: ({px}, {py})"
+
+                        # Position labels
+                        label_x = px + 35
+                        label_y_ws = py - 25
+                        label_y_px = py - 5
+
+                        # Draw background rectangles for labels
+                        (w_ws, h_ws), _ = cv2.getTextSize(workspace_label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                        (w_px, h_px), _ = cv2.getTextSize(pixel_label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+
+                        cv2.rectangle(frame, (label_x - 2, label_y_ws - h_ws - 2),
+                                     (label_x + w_ws + 2, label_y_ws + 2), (0, 0, 0), -1)
+                        cv2.rectangle(frame, (label_x - 2, label_y_px - h_px - 2),
+                                     (label_x + w_px + 2, label_y_px + 2), (0, 0, 0), -1)
+
+                        # Draw labels
+                        cv2.putText(frame, workspace_label, (label_x, label_y_ws),
+                                  cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
+                        cv2.putText(frame, pixel_label, (label_x, label_y_px),
+                                  cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
 
             # Draw workspace boundary if calibration exists
             if self.H_workspace_to_camera is not None:
