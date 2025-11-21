@@ -10,6 +10,7 @@ import json
 import os
 import time
 import struct
+import pickle
 from multiprocessing import shared_memory
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                               QHBoxLayout, QLabel, QLineEdit, QPushButton,
@@ -285,20 +286,25 @@ class CoordinateTester(QMainWindow):
         return {}
 
     def load_calibration(self):
-        """Load calibration matrix"""
+        """Load calibration matrix from homography_auto.pkl"""
         # Get script directory to find calibration file
         script_dir = os.path.dirname(os.path.abspath(__file__))
         calib_file = os.path.join(script_dir, "homography_auto.pkl")
 
         if os.path.exists(calib_file):
-            import pickle
-            with open(calib_file, 'rb') as f:
-                self.H_camera_to_workspace = pickle.load(f)
-                # Calculate inverse matrix
-                self.H_workspace_to_camera = np.linalg.inv(self.H_camera_to_workspace)
-            self.status_label.setText("Status: Calibration loaded ✓")
+            try:
+                with open(calib_file, 'rb') as f:
+                    self.H_camera_to_workspace = pickle.load(f)
+                    # Calculate inverse matrix for camera display
+                    self.H_workspace_to_camera = np.linalg.inv(self.H_camera_to_workspace)
+                self.status_label.setText("Status: Calibration loaded ✓")
+                print(f"[INFO] Loaded calibration: {calib_file}")
+            except Exception as e:
+                self.status_label.setText(f"Status: Error loading calibration - {str(e)[:30]}...")
+                print(f"[ERROR] Failed to load calibration: {e}")
         else:
-            self.status_label.setText(f"Status: No calibration found at {calib_file}")
+            self.status_label.setText(f"Status: No calibration found")
+            print(f"[WARNING] Calibration file not found: {calib_file}")
 
     def init_ui(self):
         """Initialize user interface"""
