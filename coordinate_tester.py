@@ -146,10 +146,43 @@ class CoordinateTester(QMainWindow):
                 self.detection_camera.AcquisitionMode.SetValue(PySpin.AcquisitionMode_Continuous)
                 self.detection_camera.BeginAcquisition()
                 self.status_label.setText("Status: Camera connected ✓")
+                print("[INFO] Camera initialized successfully")
             else:
                 self.status_label.setText("Status: No camera detected")
+                print("[WARNING] No cameras found")
+                self.show_no_camera_message()
         except Exception as e:
-            self.status_label.setText(f"Status: Camera error - {str(e)}")
+            error_msg = str(e)
+            self.status_label.setText(f"Status: Camera error - {error_msg[:50]}...")
+            print(f"[ERROR] Camera initialization failed: {error_msg}")
+
+            # Check if camera is in use
+            if "in use" in error_msg.lower() or "already" in error_msg.lower():
+                self.info_label.setText("⚠ Camera is in use by another application. Close other apps and restart.")
+
+            self.show_no_camera_message()
+
+    def show_no_camera_message(self):
+        """Show message when camera is not available"""
+        # Create a placeholder image
+        placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
+        cv2.putText(placeholder, "No Camera Feed Available", (120, 220),
+                   cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        cv2.putText(placeholder, "Make sure:", (200, 280),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 1)
+        cv2.putText(placeholder, "1. Camera is connected", (180, 310),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
+        cv2.putText(placeholder, "2. No other app is using camera", (180, 340),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
+        cv2.putText(placeholder, "3. Restart this tool", (180, 370),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
+
+        # Display placeholder
+        h, w, ch = placeholder.shape
+        bytes_per_line = ch * w
+        qt_image = QImage(placeholder.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
+        pixmap = QPixmap.fromImage(qt_image.rgbSwapped())
+        self.camera_label.setPixmap(pixmap)
 
     def add_point(self):
         """Add a test point from input fields"""
@@ -260,7 +293,14 @@ class CoordinateTester(QMainWindow):
             self.camera_label.setPixmap(scaled_pixmap)
 
         except Exception as e:
-            pass  # Silently handle camera errors
+            # Log errors but don't crash
+            error_msg = str(e)
+            if "Spinnaker" in error_msg or "timeout" in error_msg.lower():
+                # Camera-specific errors - these are expected sometimes
+                pass
+            else:
+                # Unexpected errors - print for debugging
+                print(f"[ERROR] Camera update failed: {error_msg}")
 
     def closeEvent(self, event):
         """Clean up when closing"""
