@@ -57,7 +57,7 @@ class CoordinateTester(QMainWindow):
 
     def load_calibration(self):
         """Load calibration matrix"""
-        calib_file = "H_camera_to_workspace.pkl"
+        calib_file = "homography_auto.pkl"
         if os.path.exists(calib_file):
             import pickle
             with open(calib_file, 'rb') as f:
