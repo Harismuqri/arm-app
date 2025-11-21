@@ -1411,11 +1411,20 @@ class RobotVisionGUI(QMainWindow):
                 info_lines = [
                     f"Object ID: {self.selected_object['id']}",
                     f"Center: ({self.selected_object['x_mm']:.1f}, {self.selected_object['y_mm']:.1f}) mm",
-                    f"Clicked: ({self.selected_object['x_mm']:.1f}, {self.selected_object['y_mm']:.1f}) mm",
+                ]
+
+                # Add clicked position if available
+                if self.clicked_workspace_pos is not None:
+                    click_x_mm, click_y_mm = self.clicked_workspace_pos
+                    info_lines.append(f"Clicked: ({click_x_mm:.1f}, {click_y_mm:.1f}) mm")
+                else:
+                    info_lines.append(f"Clicked: N/A (no calibration)")
+
+                info_lines.extend([
                     f"Angle: {self.selected_object['angle']:.1f} degrees",
                     f"Width: {self.selected_object['width']:.1f} mm",
                     f"Height: {self.selected_object['height']:.1f} mm"
-                ]
+                ])
 
                 annotated = self.draw_info_panel_on_frame(
                     annotated,
@@ -1558,6 +1567,16 @@ class RobotVisionGUI(QMainWindow):
                 self.selected_object = obj_data
                 self.show_info_panel = True
                 clicked_on_object = True
+
+                # Convert click position to workspace coordinates
+                if self.H_camera_to_workspace is not None:
+                    click_pt = np.array([[x, y]], dtype=np.float32).reshape(-1, 1, 2)
+                    workspace_coord = cv2.perspectiveTransform(click_pt, self.H_camera_to_workspace).reshape(-1, 2)
+                    click_x_mm = workspace_coord[0][0]
+                    click_y_mm = workspace_coord[0][1]
+                    self.clicked_workspace_pos = (click_x_mm, click_y_mm)
+                else:
+                    self.clicked_workspace_pos = None
 
                 # Update detection info text
                 info_text = f"OBJECT DETECTION | ID: {obj_data['id']}\n"
