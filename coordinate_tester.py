@@ -57,7 +57,10 @@ class CoordinateTester(QMainWindow):
 
     def load_calibration(self):
         """Load calibration matrix"""
-        calib_file = "homography_auto.pkl"
+        # Get script directory to find calibration file
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        calib_file = os.path.join(script_dir, "homography_auto.pkl")
+
         if os.path.exists(calib_file):
             import pickle
             with open(calib_file, 'rb') as f:
@@ -66,7 +69,7 @@ class CoordinateTester(QMainWindow):
                 self.H_workspace_to_camera = np.linalg.inv(self.H_camera_to_workspace)
             self.status_label.setText("Status: Calibration loaded ✓")
         else:
-            self.status_label.setText("Status: No calibration found - please calibrate first")
+            self.status_label.setText(f"Status: No calibration found at {calib_file}")
 
     def init_ui(self):
         """Initialize user interface"""
