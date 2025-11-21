@@ -230,7 +230,18 @@ class CoordinateTester(QMainWindow):
             width = image_result.GetWidth()
             height = image_result.GetHeight()
             image_data = image_result.GetNDArray()
-            frame = cv2.cvtColor(image_data, cv2.COLOR_BAYER_RG2BGR)
+
+            # Handle different pixel formats
+            if len(image_data.shape) == 2:
+                # Grayscale image
+                frame = cv2.cvtColor(image_data, cv2.COLOR_GRAY2BGR)
+            elif len(image_data.shape) == 3:
+                # Already RGB/BGR
+                frame = image_data
+            else:
+                # Unknown format
+                image_result.Release()
+                return
 
             image_result.Release()
 
