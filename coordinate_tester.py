@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                               QHBoxLayout, QLabel, QLineEdit, QPushButton,
                               QGroupBox, QGridLayout)
 from PyQt6.QtCore import QTimer, Qt
-from PyQt6.QtGui import QImage, QPixmap, QFont
+from PyQt6.QtGui import QImage, QPixmap, QFont, QColor
 import PySpin
 
 
