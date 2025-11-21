@@ -14,9 +14,58 @@ from multiprocessing import shared_memory
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                               QHBoxLayout, QLabel, QLineEdit, QPushButton,
                               QGroupBox, QGridLayout)
-from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap, QFont, QColor
 import PySpin
+
+
+class ClickableLabel(QLabel):
+    """Custom QLabel that emits click signals with scaled coordinates"""
+    clicked = pyqtSignal(int, int)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.original_image_size = None  # Store original image size for coordinate scaling
+        self.displayed_image_size = None  # Store displayed (scaled) image size
+
+    def mousePressEvent(self, event):
+        """Handle mouse press events and emit scaled coordinates"""
+        if event.button() == Qt.MouseButton.LeftButton:
+            # Get click position in widget coordinates
+            click_pos = event.pos()
+            widget_x = click_pos.x()
+            widget_y = click_pos.y()
+
+            # Scale coordinates to match original image size
+            if self.original_image_size and self.displayed_image_size:
+                # Calculate image offset (image is centered in label)
+                label_w = self.width()
+                label_h = self.height()
+                img_w = self.displayed_image_size[0]
+                img_h = self.displayed_image_size[1]
+
+                offset_x = (label_w - img_w) / 2
+                offset_y = (label_h - img_h) / 2
+
+                # Adjust click position by offset
+                img_click_x = widget_x - offset_x
+                img_click_y = widget_y - offset_y
+
+                # Check if click is within image bounds
+                if 0 <= img_click_x < img_w and 0 <= img_click_y < img_h:
+                    # Calculate scaling factors
+                    scale_x = self.original_image_size[0] / self.displayed_image_size[0]
+                    scale_y = self.original_image_size[1] / self.displayed_image_size[1]
+
+                    # Scale click coordinates to original image size
+                    orig_x = int(img_click_x * scale_x)
+                    orig_y = int(img_click_y * scale_y)
+
+                    # Emit signal with scaled coordinates
+                    self.clicked.emit(orig_x, orig_y)
+            else:
+                # No scaling info, emit raw coordinates
+                self.clicked.emit(widget_x, widget_y)
 
 
 class ClickDataManager:
@@ -204,6 +253,12 @@ class CoordinateTester(QMainWindow):
         # Test points to display
         self.test_points = []  # List of (x_mm, y_mm) tuples
 
+        # Click info panel tracking
+        self.mouse_click_x = 0
+        self.mouse_click_y = 0
+        self.show_info_panel = False
+        self.clicked_workspace_pos = None  # Store clicked position in workspace coordinates (x_mm, y_mm)
+
         # Robot control - using InspectData for inspection commands
         self.inspect_data_mgr = None
         try:
@@ -305,10 +360,11 @@ class CoordinateTester(QMainWindow):
         # Detection camera view
         det_group = QGroupBox("Detection Camera (Workspace View)")
         det_layout = QVBoxLayout()
-        self.detection_label = QLabel()
+        self.detection_label = ClickableLabel()  # Use ClickableLabel for click detection
         self.detection_label.setMinimumSize(640, 480)
         self.detection_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.detection_label.setStyleSheet("border: 2px solid #555; background-color: #2a2a2a;")
+        self.detection_label.clicked.connect(self.on_detection_click)  # Connect click signal
         det_layout.addWidget(self.detection_label)
         det_group.setLayout(det_layout)
         cameras_layout.addWidget(det_group)
@@ -446,6 +502,74 @@ class CoordinateTester(QMainWindow):
         except ValueError:
             self.info_label.setText("✗ Error: Please enter valid numbers for X and Y")
 
+    def on_detection_click(self, x, y):
+        """Handle click on detection camera - show info panel with coordinates"""
+        self.mouse_click_x = x
+        self.mouse_click_y = y
+        self.show_info_panel = True
+
+        # Convert click position to workspace coordinates
+        if self.H_camera_to_workspace is not None:
+            click_pt = np.array([[x, y]], dtype=np.float32).reshape(-1, 1, 2)
+            workspace_coord = cv2.perspectiveTransform(click_pt, self.H_camera_to_workspace).reshape(-1, 2)
+            click_x_mm = workspace_coord[0][0]
+            click_y_mm = workspace_coord[0][1]
+            self.clicked_workspace_pos = (click_x_mm, click_y_mm)
+
+            # Check if inside workspace
+            workspace_width = self.config.get("workspace", {}).get("width", 300)
+            workspace_height = self.config.get("workspace", {}).get("height", 300)
+
+            if 0 <= click_x_mm <= workspace_width and 0 <= click_y_mm <= workspace_height:
+                self.status_label.setText(f"Status: Clicked at ({click_x_mm:.1f}, {click_y_mm:.1f}) mm - In workspace ✓")
+            else:
+                self.status_label.setText(f"Status: Clicked at ({click_x_mm:.1f}, {click_y_mm:.1f}) mm - Outside workspace")
+        else:
+            self.clicked_workspace_pos = None
+            self.status_label.setText(f"Status: Clicked at pixel ({x}, {y}) - No calibration")
+
+    def draw_info_panel_on_frame(self, frame, x, y, info_lines, title="Info"):
+        """Draw an information panel at specified position"""
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.5
+        thickness = 1
+        padding = 10
+        line_height = 20
+
+        max_width = 0
+        for line in info_lines:
+            (w, h), _ = cv2.getTextSize(line, font, font_scale, thickness)
+            max_width = max(max_width, w)
+
+        panel_width = max_width + 2 * padding
+        panel_height = len(info_lines) * line_height + 2 * padding + 25
+
+        # Adjust position if panel goes off screen
+        if x + panel_width > frame.shape[1]:
+            x = frame.shape[1] - panel_width - 10
+        if y + panel_height > frame.shape[0]:
+            y = frame.shape[0] - panel_height - 10
+
+        # Draw semi-transparent background
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (x, y), (x + panel_width, y + panel_height), (0, 0, 0), -1)
+        cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
+
+        # Draw border
+        cv2.rectangle(frame, (x, y), (x + panel_width, y + panel_height), (0, 255, 255), 2)
+
+        # Draw title
+        cv2.rectangle(frame, (x, y), (x + panel_width, y + 25), (0, 255, 255), -1)
+        cv2.putText(frame, title, (x + padding, y + 18), font, 0.6, (0, 0, 0), 2, cv2.LINE_AA)
+
+        # Draw info lines
+        y_offset = y + 40
+        for line in info_lines:
+            cv2.putText(frame, line, (x + padding, y_offset), font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
+            y_offset += line_height
+
+        return frame
+
     def update_cameras(self):
         """Update both camera displays"""
         # Update detection camera
@@ -500,10 +624,51 @@ class CoordinateTester(QMainWindow):
                         camera_corners = camera_corners.astype(np.int32)
                         cv2.polylines(frame, [camera_corners], isClosed=True, color=(0, 255, 255), thickness=2)
 
+                    # Draw info panel if showing coordinates
+                    if self.show_info_panel and self.clicked_workspace_pos is not None:
+                        workspace_width = self.config.get("workspace", {}).get("width", 300)
+                        workspace_height = self.config.get("workspace", {}).get("height", 300)
+                        click_x_mm, click_y_mm = self.clicked_workspace_pos
+                        in_workspace = (0 <= click_x_mm <= workspace_width and 0 <= click_y_mm <= workspace_height)
+
+                        info_lines = [
+                            f"Pixel: ({self.mouse_click_x}, {self.mouse_click_y})",
+                            f"Real: ({click_x_mm:.1f}, {click_y_mm:.1f}) mm",
+                            f"In workspace: {'Yes' if in_workspace else 'No'}"
+                        ]
+
+                        frame = self.draw_info_panel_on_frame(
+                            frame,
+                            self.mouse_click_x + 10,
+                            self.mouse_click_y + 10,
+                            info_lines,
+                            "Coordinates"
+                        )
+
+                        # Draw crosshair at click position
+                        cv2.drawMarker(frame, (self.mouse_click_x, self.mouse_click_y),
+                                      (0, 255, 255), cv2.MARKER_CROSS, 20, 2)
+
                     # Display detection camera
                     h, w, ch = frame.shape
+
+                    # Store original image size for ClickableLabel coordinate scaling
+                    if isinstance(self.detection_label, ClickableLabel):
+                        self.detection_label.original_image_size = (w, h)
                     qt_image = QImage(frame.data, w, h, ch * w, QImage.Format.Format_RGB888)
                     pixmap = QPixmap.fromImage(qt_image.rgbSwapped())
+
+                    # Calculate displayed size for coordinate scaling
+                    label_w = self.detection_label.width()
+                    label_h = self.detection_label.height()
+                    scale = min(label_w / w, label_h / h)
+                    displayed_w = int(w * scale)
+                    displayed_h = int(h * scale)
+
+                    # Store displayed image size for ClickableLabel coordinate scaling
+                    if isinstance(self.detection_label, ClickableLabel):
+                        self.detection_label.displayed_image_size = (displayed_w, displayed_h)
+
                     scaled_pixmap = pixmap.scaled(self.detection_label.size(),
                                                  Qt.AspectRatioMode.KeepAspectRatio,
                                                  Qt.TransformationMode.SmoothTransformation)
