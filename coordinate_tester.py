@@ -236,8 +236,8 @@ class CoordinateTester(QMainWindow):
                 # Grayscale image
                 frame = cv2.cvtColor(image_data, cv2.COLOR_GRAY2BGR)
             elif len(image_data.shape) == 3:
-                # Already RGB/BGR
-                frame = image_data
+                # Already RGB/BGR - make a writable copy
+                frame = image_data.copy()
             else:
                 # Unknown format
                 image_result.Release()
