@@ -20,7 +20,7 @@ import PySpin
 
 
 class ClickDataManager:
-    """Manages shared memory for sending coordinates to robot"""
+    """Manages shared memory for sending move coordinates to robot"""
 
     def __init__(self, name="ClickData", size=512):
         self.name = name
@@ -93,6 +93,94 @@ class ClickDataManager:
                 pass
 
 
+class InspectDataManager:
+    """Manages shared memory for sending inspection commands to robot"""
+
+    def __init__(self, name="InspectData", size=512):
+        self.name = name
+        self.size = size
+        self.shm = None
+        self._initialize_shared_memory()
+
+    def _initialize_shared_memory(self):
+        """Create or attach to existing shared memory."""
+        try:
+            self.shm = shared_memory.SharedMemory(name=self.name, create=False)
+        except FileNotFoundError:
+            try:
+                self.shm = shared_memory.SharedMemory(name=self.name, create=True, size=self.size)
+                # Get camera offset from config
+                camera_offset = self.get_camera_offset_from_config()
+                self._write_data({
+                    "inspect": False,
+                    "target_x": 0,
+                    "target_y": 0,
+                    "angle": 0.0,
+                    "width": 0.0,
+                    "height": 0.0,
+                    "offset_x": camera_offset.get("offset_x", 7.0),
+                    "offset_y": camera_offset.get("offset_y", 92.9),
+                    "timestamp": 0,
+                    "processed": True
+                })
+            except Exception as e:
+                print(f"[ERROR] Failed to create inspect shared memory: {e}")
+                raise
+
+    def get_camera_offset_from_config(self):
+        """Get camera offset from config.json"""
+        try:
+            if os.path.exists("config.json"):
+                with open("config.json", "r") as f:
+                    config = json.load(f)
+                    return config.get("camera_offset", {"offset_x": 7.0, "offset_y": 92.9, "offset_error": 0.0})
+        except:
+            pass
+        return {"offset_x": 7.0, "offset_y": 92.9, "offset_error": 0.0}
+
+    def _write_data(self, data):
+        """Write data to shared memory as JSON."""
+        try:
+            json_str = json.dumps(data)
+            json_bytes = json_str.encode('utf-8')
+
+            if len(json_bytes) > self.size - 4:
+                return False
+
+            self.shm.buf[:4] = struct.pack('I', len(json_bytes))
+            self.shm.buf[4:4+len(json_bytes)] = json_bytes
+            return True
+        except Exception as e:
+            print(f"[ERROR] Failed to write inspect data: {e}")
+            return False
+
+    def send_inspect_command(self, target_x, target_y, angle=0.0, width=0.0, height=0.0):
+        """Send inspection command with target position and object angle."""
+        camera_offset = self.get_camera_offset_from_config()
+        data = {
+            "inspect": True,
+            "target_x": float(target_x),
+            "target_y": float(target_y),
+            "angle": float(angle),
+            "width": float(width),
+            "height": float(height),
+            "offset_x": camera_offset.get("offset_x", 7.0),
+            "offset_y": camera_offset.get("offset_y", 92.9),
+            "offset_error": camera_offset.get("offset_error", 0.0),
+            "timestamp": time.time(),
+            "processed": False
+        }
+        return self._write_data(data)
+
+    def cleanup(self):
+        """Close and unlink shared memory."""
+        if self.shm:
+            try:
+                self.shm.close()
+            except:
+                pass
+
+
 class CoordinateTester(QMainWindow):
     """Simple tool to test coordinates by showing dots on camera"""
 
@@ -116,13 +204,13 @@ class CoordinateTester(QMainWindow):
         # Test points to display
         self.test_points = []  # List of (x_mm, y_mm) tuples
 
-        # Robot control
-        self.click_data_mgr = None
+        # Robot control - using InspectData for inspection commands
+        self.inspect_data_mgr = None
         try:
-            self.click_data_mgr = ClickDataManager(name="ClickData", size=512)
-            print("[INFO] Connected to robot control shared memory")
+            self.inspect_data_mgr = InspectDataManager(name="InspectData", size=512)
+            print("[INFO] Connected to robot inspection control shared memory")
         except Exception as e:
-            print(f"[WARNING] Could not connect to robot control: {e}")
+            print(f"[WARNING] Could not connect to robot inspection control: {e}")
 
         self.init_ui()
         self.init_cameras()
@@ -192,9 +280,9 @@ class CoordinateTester(QMainWindow):
         self.add_btn.clicked.connect(self.add_point)
         btn_layout.addWidget(self.add_btn)
 
-        self.send_robot_btn = QPushButton("Send to Robot")
+        self.send_robot_btn = QPushButton("Inspect Target")
         self.send_robot_btn.clicked.connect(self.send_to_robot)
-        self.send_robot_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+        self.send_robot_btn.setStyleSheet("background-color: #FF9800; color: white; font-weight: bold;")
         btn_layout.addWidget(self.send_robot_btn)
 
         self.clear_btn = QPushButton("Clear All")
@@ -239,7 +327,7 @@ class CoordinateTester(QMainWindow):
         layout.addLayout(cameras_layout)
 
         # Info label
-        self.info_label = QLabel("Enter coordinates and click 'Send to Robot' to move gripper")
+        self.info_label = QLabel("Enter coordinates and click 'Inspect Target' to position inspection camera")
         self.info_label.setFont(QFont("Arial", 9))
         self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.info_label)
@@ -337,21 +425,23 @@ class CoordinateTester(QMainWindow):
         self.info_label.setText("All points cleared")
 
     def send_to_robot(self):
-        """Send coordinates to robot via shared memory"""
+        """Send inspection command to robot via shared memory"""
         try:
             x_mm = float(self.x_input.text())
             y_mm = float(self.y_input.text())
 
-            if self.click_data_mgr is None:
-                self.info_label.setText("✗ Error: Robot control not connected")
+            if self.inspect_data_mgr is None:
+                self.info_label.setText("✗ Error: Robot inspection control not connected")
                 return
 
-            # Send coordinate to robot
-            if self.click_data_mgr.send_coordinate(x_mm, y_mm):
-                self.info_label.setText(f"✓ Sent to robot: ({x_mm:.1f}, {y_mm:.1f}) mm")
-                print(f"[INFO] Sent coordinates to robot: ({x_mm:.1f}, {y_mm:.1f})")
+            # Send inspection command to robot
+            # Robot will position gripper so inspection camera views the target at (x_mm, y_mm)
+            # at inspection_height (103.4mm from config.json)
+            if self.inspect_data_mgr.send_inspect_command(x_mm, y_mm, angle=0.0, width=0.0, height=0.0):
+                self.info_label.setText(f"✓ Inspection command sent: Target ({x_mm:.1f}, {y_mm:.1f}) mm at height 103.4mm")
+                print(f"[INFO] Sent inspection command: Target ({x_mm:.1f}, {y_mm:.1f}) mm")
             else:
-                self.info_label.setText("✗ Error: Failed to send to robot")
+                self.info_label.setText("✗ Error: Failed to send inspection command")
 
         except ValueError:
             self.info_label.setText("✗ Error: Please enter valid numbers for X and Y")
@@ -499,9 +589,9 @@ class CoordinateTester(QMainWindow):
                 pass
 
         # Clean up shared memory
-        if self.click_data_mgr:
+        if self.inspect_data_mgr:
             try:
-                self.click_data_mgr.cleanup()
+                self.inspect_data_mgr.cleanup()
             except:
                 pass
 
