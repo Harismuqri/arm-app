@@ -441,8 +441,25 @@ class CoordinateTester(QMainWindow):
 
                     image_result.Release()
 
-                    # Display inspection camera
+                    # Draw center point marker to show gripper aim point
                     h, w, ch = frame.shape
+                    center_x = w // 2
+                    center_y = h // 2
+
+                    # Draw red dot at center
+                    cv2.circle(frame, (center_x, center_y), 3, (0, 0, 255), -1, cv2.LINE_AA)
+
+                    # Add label
+                    label = "Center"
+                    (label_w, label_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                    label_x = center_x + 10
+                    label_y = center_y - 10
+                    cv2.rectangle(frame, (label_x - 2, label_y - label_h - 2),
+                                 (label_x + label_w + 2, label_y + 2), (0, 0, 0), -1)
+                    cv2.putText(frame, label, (label_x, label_y),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
+
+                    # Display inspection camera
                     qt_image = QImage(frame.data, w, h, ch * w, QImage.Format.Format_RGB888)
                     pixmap = QPixmap.fromImage(qt_image.rgbSwapped())
                     scaled_pixmap = pixmap.scaled(self.inspection_label.size(),
