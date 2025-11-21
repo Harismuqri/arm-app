@@ -423,8 +423,8 @@ class RobotVisionGUI(QMainWindow):
         self.inspection_box_visible = False
         self.inspection_box_x = 0  # Center position
         self.inspection_box_y = 0  # Center position
-        self.inspection_box_width = 0  # Object width in pixels
-        self.inspection_box_height = 0  # Object height in pixels
+        self.inspection_box_width = 0  # Fixed size: 36x36 pixels
+        self.inspection_box_height = 0  # Fixed size: 36x36 pixels
         self.inspection_box_angle = 0.0  # Rotation angle in degrees
         self.inspection_box_object_data = None  # Store object data for reference
 
@@ -1603,22 +1603,15 @@ class RobotVisionGUI(QMainWindow):
         # Check if double-clicked on any detected object
         for obj_data in self.detected_objects:
             if self.point_in_polygon((x, y), obj_data['corners']):
-                # Calculate box size based on object dimensions (convert mm to pixels)
-                pixel_per_mm = 2.0  # Approximate ratio, adjust if needed
-
-                # When width > height, use height for box width (square inspection view)
-                if obj_data['width'] > obj_data['height']:
-                    box_width_px = obj_data['height'] * pixel_per_mm
-                else:
-                    box_width_px = obj_data['width'] * pixel_per_mm
-                box_height_px = obj_data['height'] * pixel_per_mm
+                # Use fixed inspection box size (36x36 pixels)
+                box_size = 36
 
                 # Store inspection box data
                 self.inspection_box_visible = True
                 self.inspection_box_x = x  # Center at click position
                 self.inspection_box_y = y
-                self.inspection_box_width = int(box_width_px)
-                self.inspection_box_height = int(box_height_px)
+                self.inspection_box_width = box_size
+                self.inspection_box_height = box_size
                 self.inspection_box_angle = obj_data['angle']  # Start with object's angle
                 self.inspection_box_object_data = obj_data
                 break
