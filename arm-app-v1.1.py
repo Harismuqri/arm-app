@@ -423,8 +423,8 @@ class RobotVisionGUI(QMainWindow):
         self.inspection_box_visible = False
         self.inspection_box_x = 0  # Center position
         self.inspection_box_y = 0  # Center position
-        self.inspection_box_width = 0  # Fixed size: 36x36 pixels
-        self.inspection_box_height = 0  # Fixed size: 36x36 pixels
+        self.inspection_box_width = 0  # Fixed size: 36mm x 36mm (converted to pixels)
+        self.inspection_box_height = 0  # Fixed size: 36mm x 36mm (converted to pixels)
         self.inspection_box_angle = 0.0  # Rotation angle in degrees
         self.inspection_box_object_data = None  # Store object data for reference
 
@@ -1603,8 +1603,10 @@ class RobotVisionGUI(QMainWindow):
         # Check if double-clicked on any detected object
         for obj_data in self.detected_objects:
             if self.point_in_polygon((x, y), obj_data['corners']):
-                # Use fixed inspection box size (36x36 pixels)
-                box_size = 36
+                # Use fixed inspection box size (36mm x 36mm)
+                pixel_per_mm = 2.0  # Approximate ratio, adjust if needed
+                box_size_mm = 36  # Fixed 36mm inspection area
+                box_size = int(box_size_mm * pixel_per_mm)  # Convert to pixels
 
                 # Store inspection box data
                 self.inspection_box_visible = True
