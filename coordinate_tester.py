@@ -758,7 +758,7 @@ class CoordinateTester(QMainWindow):
 
                                             # Draw object label with angle
                                             label_pos = tuple(corners_int[0] - [0, 10])
-                                            label_text = f"Obj {i}: {angle_deg:.0f}°"
+                                            label_text = f"Obj {i}: {angle_deg:.0f}"
                                             cv2.putText(frame, label_text, label_pos,
                                                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
                         except Exception as e:
@@ -948,6 +948,8 @@ class CoordinateTester(QMainWindow):
         # Clean up camera system
         if self.system:
             try:
+                cam_list = self.system.GetCameras()
+                cam_list.Clear()
                 self.system.ReleaseInstance()
             except:
                 pass
