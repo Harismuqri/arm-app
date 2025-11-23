@@ -410,22 +410,21 @@ class CoordinateTester(QMainWindow):
 
         # Input group
         input_group = QGroupBox("Coordinate Input (Workspace mm)")
+        input_main_layout = QHBoxLayout()  # Horizontal layout for inputs and buttons
+
+        # Left side: Input fields
         input_layout = QGridLayout()
-        input_layout.setSpacing(5)  # Reduce spacing between fields
-        input_layout.setContentsMargins(5, 5, 5, 5)  # Reduce margins
 
         # X coordinate
         input_layout.addWidget(QLabel("X (mm):"), 0, 0)
         self.x_input = QLineEdit()
         self.x_input.setPlaceholderText("Enter X coordinate")
-        self.x_input.setMaximumHeight(25)  # Make input more compact
         input_layout.addWidget(self.x_input, 0, 1)
 
         # Y coordinate
         input_layout.addWidget(QLabel("Y (mm):"), 1, 0)
         self.y_input = QLineEdit()
         self.y_input.setPlaceholderText("Enter Y coordinate")
-        self.y_input.setMaximumHeight(25)
         input_layout.addWidget(self.y_input, 1, 1)
 
         # Angle input
@@ -433,7 +432,6 @@ class CoordinateTester(QMainWindow):
         self.angle_input = QLineEdit()
         self.angle_input.setPlaceholderText("Enter angle (0-180)")
         self.angle_input.setText("0")  # Default to 0 degrees
-        self.angle_input.setMaximumHeight(25)
         self.angle_input.textChanged.connect(self.on_angle_changed)  # Update display when angle changes
         input_layout.addWidget(self.angle_input, 2, 1)
 
@@ -442,7 +440,6 @@ class CoordinateTester(QMainWindow):
         self.offset_x_input = QLineEdit()
         self.offset_x_input.setPlaceholderText("Camera offset X")
         self.offset_x_input.setText("0.8")  # Calibrated offset
-        self.offset_x_input.setMaximumHeight(25)
         input_layout.addWidget(self.offset_x_input, 3, 1)
 
         # Camera offset Y input
@@ -450,7 +447,6 @@ class CoordinateTester(QMainWindow):
         self.offset_y_input = QLineEdit()
         self.offset_y_input.setPlaceholderText("Camera offset Y")
         self.offset_y_input.setText("85.3")  # Calibrated offset
-        self.offset_y_input.setMaximumHeight(25)
         input_layout.addWidget(self.offset_y_input, 4, 1)
 
         # Camera offset error X input
@@ -458,7 +454,6 @@ class CoordinateTester(QMainWindow):
         self.offset_error_x_input = QLineEdit()
         self.offset_error_x_input.setPlaceholderText("Error X")
         self.offset_error_x_input.setText("0")  # Default offset error X
-        self.offset_error_x_input.setMaximumHeight(25)
         input_layout.addWidget(self.offset_error_x_input, 5, 1)
 
         # Camera offset error Y input
@@ -466,11 +461,12 @@ class CoordinateTester(QMainWindow):
         self.offset_error_y_input = QLineEdit()
         self.offset_error_y_input.setPlaceholderText("Error Y")
         self.offset_error_y_input.setText("0")  # Default offset error Y
-        self.offset_error_y_input.setMaximumHeight(25)
         input_layout.addWidget(self.offset_error_y_input, 6, 1)
 
-        # Buttons
-        btn_layout = QHBoxLayout()
+        input_main_layout.addLayout(input_layout)
+
+        # Right side: Buttons (vertical stack)
+        btn_layout = QVBoxLayout()
 
         self.add_btn = QPushButton("Add Point")
         self.add_btn.clicked.connect(self.add_point)
@@ -490,9 +486,11 @@ class CoordinateTester(QMainWindow):
         self.clear_btn.clicked.connect(self.clear_points)
         btn_layout.addWidget(self.clear_btn)
 
-        input_layout.addLayout(btn_layout, 7, 0, 1, 2)
+        btn_layout.addStretch()  # Push buttons to top
 
-        input_group.setLayout(input_layout)
+        input_main_layout.addLayout(btn_layout)
+
+        input_group.setLayout(input_main_layout)
         layout.addWidget(input_group)
 
         # Status label
