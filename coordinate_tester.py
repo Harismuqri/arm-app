@@ -334,6 +334,13 @@ class CoordinateTester(QMainWindow):
         self.y_input.setPlaceholderText("Enter Y coordinate")
         input_layout.addWidget(self.y_input, 1, 1)
 
+        # Angle input
+        input_layout.addWidget(QLabel("Angle (°):"), 2, 0)
+        self.angle_input = QLineEdit()
+        self.angle_input.setPlaceholderText("Enter angle (0-180)")
+        self.angle_input.setText("0")  # Default to 0 degrees
+        input_layout.addWidget(self.angle_input, 2, 1)
+
         # Buttons
         btn_layout = QHBoxLayout()
 
@@ -350,7 +357,7 @@ class CoordinateTester(QMainWindow):
         self.clear_btn.clicked.connect(self.clear_points)
         btn_layout.addWidget(self.clear_btn)
 
-        input_layout.addLayout(btn_layout, 2, 0, 1, 2)
+        input_layout.addLayout(btn_layout, 3, 0, 1, 2)
 
         input_group.setLayout(input_layout)
         layout.addWidget(input_group)
@@ -389,7 +396,7 @@ class CoordinateTester(QMainWindow):
         layout.addLayout(cameras_layout)
 
         # Info label
-        self.info_label = QLabel("Enter coordinates and click 'Inspect Target' to position inspection camera")
+        self.info_label = QLabel("Enter coordinates and angle (0-180°) then click 'Inspect Target' to position inspection camera")
         self.info_label.setFont(QFont("Arial", 9))
         self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.info_label)
@@ -491,6 +498,7 @@ class CoordinateTester(QMainWindow):
         try:
             x_mm = float(self.x_input.text())
             y_mm = float(self.y_input.text())
+            angle = float(self.angle_input.text()) if self.angle_input.text() else 0.0
 
             if self.inspect_data_mgr is None:
                 self.info_label.setText("✗ Error: Robot inspection control not connected")
@@ -499,14 +507,14 @@ class CoordinateTester(QMainWindow):
             # Send inspection command to robot
             # Robot will position gripper so inspection camera views the target at (x_mm, y_mm)
             # at inspection_height (103.4mm from config.json)
-            if self.inspect_data_mgr.send_inspect_command(x_mm, y_mm, angle=0.0, width=0.0, height=0.0):
-                self.info_label.setText(f"✓ Inspection command sent: Target ({x_mm:.1f}, {y_mm:.1f}) mm at height 103.4mm")
-                print(f"[INFO] Sent inspection command: Target ({x_mm:.1f}, {y_mm:.1f}) mm")
+            if self.inspect_data_mgr.send_inspect_command(x_mm, y_mm, angle=angle, width=0.0, height=0.0):
+                self.info_label.setText(f"✓ Inspection command sent: Target ({x_mm:.1f}, {y_mm:.1f}) mm, Angle: {angle:.1f}° at height 103.4mm")
+                print(f"[INFO] Sent inspection command: Target ({x_mm:.1f}, {y_mm:.1f}) mm, Angle: {angle:.1f}°")
             else:
                 self.info_label.setText("✗ Error: Failed to send inspection command")
 
         except ValueError:
-            self.info_label.setText("✗ Error: Please enter valid numbers for X and Y")
+            self.info_label.setText("✗ Error: Please enter valid numbers for X, Y, and Angle")
 
     def on_detection_click(self, x, y):
         """Handle click on detection camera - show info panel with coordinates"""
