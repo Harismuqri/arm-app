@@ -282,10 +282,9 @@ class CoordinateTester(QMainWindow):
             print(f"[WARNING] Could not connect to robot inspection control: {e}")
 
         self.init_ui()
-        self.init_cameras()
         self.load_calibration()
 
-        # Start camera timer
+        # Start camera timer - cameras will be initialized on first update
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_cameras)
         self.timer.start(33)  # ~30 FPS
@@ -675,6 +674,13 @@ class CoordinateTester(QMainWindow):
 
     def update_cameras(self):
         """Update both camera displays"""
+        # Initialize cameras on first update (lazy initialization to avoid DLL conflicts)
+        if self.detection_camera is None:
+            self.init_cameras()
+            if self.detection_camera is None:
+                # Failed to initialize, try again next time
+                return
+
         # Update detection camera
         if self.detection_camera:
             try:
