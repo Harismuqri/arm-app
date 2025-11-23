@@ -21,35 +21,12 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap, QFont, QColor
 
-# YOLO import - MUST be before PySpin to avoid DLL loading issues
-# Only import if model file exists to prevent DLL conflicts
-YOLO_AVAILABLE = False
-YOLO = None
-
 # Get script directory for finding config.json
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(SCRIPT_DIR, "config.json")
 
-# Check if YOLO model file exists before importing (prevents PyTorch DLL loading if not needed)
-if os.path.exists(CONFIG_PATH):
-    with open(CONFIG_PATH, 'r') as f:
-        temp_config = json.load(f)
-        model_path = temp_config.get("yolo_model_path")
-        if model_path and os.path.exists(model_path):
-            try:
-                from ultralytics import YOLO
-                YOLO_AVAILABLE = True
-                print(f"[INFO] YOLO available - model found at: {model_path}")
-            except Exception as e:
-                print(f"[WARNING] YOLO import failed: {e}")
-                print("[INFO] Coordinate tester will work with manual angle input only")
-        else:
-            print(f"[INFO] YOLO model not found - automatic angle detection disabled")
-            print(f"[INFO] Expected path: {model_path}")
-            print("[INFO] Coordinate tester will work with manual angle input only")
-else:
-    print(f"[INFO] config.json not found at: {CONFIG_PATH}")
-    print("[INFO] YOLO disabled")
+# YOLO import - MUST be before PySpin to avoid DLL loading issues
+from ultralytics import YOLO
 
 # PySpin import - MUST be after YOLO
 import PySpin
@@ -326,22 +303,9 @@ class CoordinateTester(QMainWindow):
 
     def load_yolo_model(self):
         """Load YOLO model from config"""
-        if not YOLO_AVAILABLE:
-            print("[INFO] YOLO not available - automatic angle detection disabled")
-            self.model = None
-            return
-
-        model_path = self.config.get("yolo_model_path")
-        if model_path and os.path.exists(model_path):
-            try:
-                self.model = YOLO(model_path)
-                print(f"[INFO] YOLO model loaded: {model_path}")
-            except Exception as e:
-                print(f"[WARNING] Failed to load YOLO model: {e}")
-                self.model = None
-        else:
-            print(f"[WARNING] YOLO model path not found in config or file doesn't exist")
-            self.model = None
+        model_path = self.config.get("yolo_model_path", "best.pt")
+        self.model = YOLO(model_path)
+        self.model.overrides['verbose'] = False
 
     def get_angle(self, obb_pts):
         """Calculate angle from OBB points (same as arm-app-v1.1.py)"""
