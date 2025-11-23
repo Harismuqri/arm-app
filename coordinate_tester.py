@@ -587,33 +587,30 @@ class CoordinateTester(QMainWindow):
         self.mouse_click_y = y
         self.show_info_panel = True
 
-        # Check if clicked on any detected object
-        clicked_on_object = False
-        for obj_data in self.detected_objects:
-            if self.point_in_polygon((x, y), obj_data['corners']):
-                clicked_on_object = True
-                # Auto-fill coordinates and angle from detected object
-                self.x_input.setText(f"{obj_data['x_mm']:.1f}")
-                self.y_input.setText(f"{obj_data['y_mm']:.1f}")
-                self.angle_input.setText(f"{obj_data['angle']:.0f}")
+        # Convert click position to workspace coordinates
+        if self.H_camera_to_workspace is not None:
+            click_pt = np.array([[x, y]], dtype=np.float32).reshape(-1, 1, 2)
+            workspace_coord = cv2.perspectiveTransform(click_pt, self.H_camera_to_workspace).reshape(-1, 2)
+            click_x_mm = workspace_coord[0][0]
+            click_y_mm = workspace_coord[0][1]
+            self.clicked_workspace_pos = (click_x_mm, click_y_mm)
 
-                self.clicked_workspace_pos = (obj_data['x_mm'], obj_data['y_mm'])
-                self.status_label.setText(f"Status: Object {obj_data['id']} - ({obj_data['x_mm']:.1f}, {obj_data['y_mm']:.1f}) mm, Angle: {obj_data['angle']:.1f}° ✓")
-                break
+            # Auto-fill coordinates in input fields (use actual click position)
+            self.x_input.setText(f"{click_x_mm:.1f}")
+            self.y_input.setText(f"{click_y_mm:.1f}")
 
-        # If not clicked on object, convert click position to workspace coordinates
-        if not clicked_on_object:
-            if self.H_camera_to_workspace is not None:
-                click_pt = np.array([[x, y]], dtype=np.float32).reshape(-1, 1, 2)
-                workspace_coord = cv2.perspectiveTransform(click_pt, self.H_camera_to_workspace).reshape(-1, 2)
-                click_x_mm = workspace_coord[0][0]
-                click_y_mm = workspace_coord[0][1]
-                self.clicked_workspace_pos = (click_x_mm, click_y_mm)
+            # Check if clicked on any detected object to auto-fill angle
+            clicked_on_object = False
+            for obj_data in self.detected_objects:
+                if self.point_in_polygon((x, y), obj_data['corners']):
+                    clicked_on_object = True
+                    # Auto-fill angle from detected object (coordinates already set to click position)
+                    self.angle_input.setText(f"{obj_data['angle']:.0f}")
+                    self.status_label.setText(f"Status: Clicked at ({click_x_mm:.1f}, {click_y_mm:.1f}) mm - Object {obj_data['id']}, Angle: {obj_data['angle']:.1f}° ✓")
+                    break
 
-                # Auto-fill coordinates in input fields (angle stays at current value)
-                self.x_input.setText(f"{click_x_mm:.1f}")
-                self.y_input.setText(f"{click_y_mm:.1f}")
-
+            # If not clicked on object, just show click coordinates
+            if not clicked_on_object:
                 # Check if inside workspace
                 workspace_width = self.config.get("workspace", {}).get("width", 300)
                 workspace_height = self.config.get("workspace", {}).get("height", 300)
@@ -622,9 +619,9 @@ class CoordinateTester(QMainWindow):
                     self.status_label.setText(f"Status: Clicked at ({click_x_mm:.1f}, {click_y_mm:.1f}) mm - In workspace ✓")
                 else:
                     self.status_label.setText(f"Status: Clicked at ({click_x_mm:.1f}, {click_y_mm:.1f}) mm - Outside workspace")
-            else:
-                self.clicked_workspace_pos = None
-                self.status_label.setText(f"Status: Clicked at pixel ({x}, {y}) - No calibration")
+        else:
+            self.clicked_workspace_pos = None
+            self.status_label.setText(f"Status: Clicked at pixel ({x}, {y}) - No calibration")
 
     def on_angle_changed(self):
         """Called when angle input changes - no action needed, display updates automatically"""
