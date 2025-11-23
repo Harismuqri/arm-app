@@ -17,7 +17,6 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                               QGroupBox, QGridLayout, QSizePolicy)
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap, QFont, QColor
-import PySpin
 
 # Try to import YOLO - if it fails, continue without automatic detection
 try:
@@ -28,6 +27,8 @@ except Exception as e:
     print("[INFO] Coordinate tester will work with manual angle input only")
     YOLO_AVAILABLE = False
     YOLO = None
+
+import PySpin
 
 
 class ClickableLabel(QLabel):
