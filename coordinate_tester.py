@@ -687,7 +687,7 @@ class CoordinateTester(QMainWindow):
                                     cv2.arrowedLine(frame, (center_x, center_y), (end_x, end_y), (255, 0, 255), 2, cv2.LINE_AA, tipLength=0.3)
 
                                     # Draw angle label
-                                    label = f"{angle_deg:.0f}°"
+                                    label = f"{angle_deg:.0f}"
                                     label_pos = (center_x + 10, center_y - 10)
                                     cv2.putText(frame, label, label_pos, cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2, cv2.LINE_AA)
                         except (ValueError, AttributeError):
