@@ -420,11 +420,11 @@ class XArmController:
 
         # Apply rotation based on angle range
         if 0 <= angle_norm < 80:
-            # Angle 0-79°: Add 270° rotation
-            camera_rotation = 0
-        else:  # 80-180°
-            # Angle 80-180°: Add 90° rotation
+            # Angle 0-79°: Add 180° rotation
             camera_rotation = 180
+        else:  # 80-180°
+            # Angle 80-180°: Add 0° rotation
+            camera_rotation = 0
 
         return object_angle + camera_rotation
 
@@ -799,17 +799,18 @@ class XArmController:
                 camera_offset_angle_in_gripper = math.degrees(math.atan2(offset_y, offset_x))
 
                 # Offset direction in workspace when gripper is at camera_angle
+                # Camera should be positioned OPPOSITE to the target
                 offset_angle_in_workspace = camera_angle + camera_offset_angle_in_gripper
                 angle_rad = math.radians(offset_angle_in_workspace)
 
-                # Calculate gripper position by adding offset
+                # Calculate gripper position by SUBTRACTING offset (camera opposite to target)
                 offset_x_ws = offset_magnitude * math.cos(angle_rad)
                 offset_y_ws = offset_magnitude * math.sin(angle_rad)
-                gripper_det_x = target_det_x + offset_x_ws
-                gripper_det_y = target_det_y + offset_y_ws
+                gripper_det_x = target_det_x - offset_x_ws
+                gripper_det_y = target_det_y - offset_y_ws
 
                 print(f"[Inspect] Camera angle: {camera_angle:.1f}°")
-                print(f"[Inspect] Offset: ({offset_x_ws:.1f}, {offset_y_ws:.1f}) mm")
+                print(f"[Inspect] Offset: (-{offset_x_ws:.1f}, -{offset_y_ws:.1f}) mm (opposite)")
                 print(f"[Inspect] Gripper position: ({gripper_det_x:.1f}, {gripper_det_y:.1f}) mm")
                 print(f"{'='*60}\n")
 
