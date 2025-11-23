@@ -212,7 +212,7 @@ class InspectDataManager:
             print(f"[ERROR] Failed to write inspect data: {e}")
             return False
 
-    def send_inspect_command(self, target_x, target_y, angle=0.0, width=0.0, height=0.0, offset_x=None, offset_y=None):
+    def send_inspect_command(self, target_x, target_y, angle=0.0, width=0.0, height=0.0, offset_x=None, offset_y=None, offset_error=None):
         """Send inspection command with target position and object angle."""
         camera_offset = self.get_camera_offset_from_config()
         # Use provided offsets or fall back to config
@@ -220,6 +220,8 @@ class InspectDataManager:
             offset_x = camera_offset.get("offset_x", 0.8)
         if offset_y is None:
             offset_y = camera_offset.get("offset_y", 85.3)
+        if offset_error is None:
+            offset_error = camera_offset.get("offset_error", 0.0)
 
         data = {
             "inspect": True,
@@ -231,7 +233,7 @@ class InspectDataManager:
             "height": float(height),
             "offset_x": float(offset_x),
             "offset_y": float(offset_y),
-            "offset_error": camera_offset.get("offset_error", 0.0),
+            "offset_error": float(offset_error),
             "timestamp": time.time(),
             "processed": False
         }
@@ -438,6 +440,13 @@ class CoordinateTester(QMainWindow):
         self.offset_y_input.setText("85.3")  # Calibrated offset
         input_layout.addWidget(self.offset_y_input, 4, 1)
 
+        # Camera offset error input
+        input_layout.addWidget(QLabel("Offset Error (mm):"), 5, 0)
+        self.offset_error_input = QLineEdit()
+        self.offset_error_input.setPlaceholderText("Camera offset error")
+        self.offset_error_input.setText("0")  # Default offset error
+        input_layout.addWidget(self.offset_error_input, 5, 1)
+
         # Buttons
         btn_layout = QHBoxLayout()
 
@@ -459,7 +468,7 @@ class CoordinateTester(QMainWindow):
         self.clear_btn.clicked.connect(self.clear_points)
         btn_layout.addWidget(self.clear_btn)
 
-        input_layout.addLayout(btn_layout, 5, 0, 1, 2)
+        input_layout.addLayout(btn_layout, 6, 0, 1, 2)
 
         input_group.setLayout(input_layout)
         layout.addWidget(input_group)
@@ -611,6 +620,7 @@ class CoordinateTester(QMainWindow):
             angle = float(self.angle_input.text()) if self.angle_input.text() else 0.0
             offset_x = float(self.offset_x_input.text()) if self.offset_x_input.text() else 0.8
             offset_y = float(self.offset_y_input.text()) if self.offset_y_input.text() else 85.3
+            offset_error = float(self.offset_error_input.text()) if self.offset_error_input.text() else 0.0
 
             if self.inspect_data_mgr is None:
                 self.info_label.setText("✗ Error: Robot inspection control not connected")
@@ -620,9 +630,9 @@ class CoordinateTester(QMainWindow):
             # Robot will position gripper so inspection camera views the target at (x_mm, y_mm)
             # at inspection_height (103.4mm from config.json)
             if self.inspect_data_mgr.send_inspect_command(x_mm, y_mm, angle=angle, width=0.0, height=0.0,
-                                                          offset_x=offset_x, offset_y=offset_y):
-                self.info_label.setText(f"✓ Inspection sent: Target ({x_mm:.1f}, {y_mm:.1f}) mm, Angle: {angle:.1f}°, Offset: ({offset_x:.1f}, {offset_y:.1f})")
-                print(f"[INFO] Sent inspection command: Target ({x_mm:.1f}, {y_mm:.1f}) mm, Angle: {angle:.1f}°, Offset: ({offset_x:.1f}, {offset_y:.1f})")
+                                                          offset_x=offset_x, offset_y=offset_y, offset_error=offset_error):
+                self.info_label.setText(f"✓ Inspection sent: Target ({x_mm:.1f}, {y_mm:.1f}) mm, Angle: {angle:.1f}°, Offset: ({offset_x:.1f}, {offset_y:.1f}), Error: {offset_error:.1f}")
+                print(f"[INFO] Sent inspection command: Target ({x_mm:.1f}, {y_mm:.1f}) mm, Angle: {angle:.1f}°, Offset: ({offset_x:.1f}, {offset_y:.1f}), Error: {offset_error:.1f}")
             else:
                 self.info_label.setText("✗ Error: Failed to send inspection command")
 
