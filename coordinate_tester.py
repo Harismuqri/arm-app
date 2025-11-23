@@ -470,20 +470,26 @@ class CoordinateTester(QMainWindow):
 
         self.add_btn = QPushButton("Add Point")
         self.add_btn.clicked.connect(self.add_point)
+        self.add_btn.setMinimumSize(140, 45)
+        self.add_btn.setFont(QFont("Arial", 11))
         btn_layout.addWidget(self.add_btn)
 
         self.send_robot_btn = QPushButton("Inspect Target")
         self.send_robot_btn.clicked.connect(self.send_to_robot)
-        self.send_robot_btn.setStyleSheet("background-color: #FF9800; color: white; font-weight: bold;")
+        self.send_robot_btn.setStyleSheet("background-color: #FF9800; color: white; font-weight: bold; font-size: 11pt;")
+        self.send_robot_btn.setMinimumSize(140, 45)
         btn_layout.addWidget(self.send_robot_btn)
 
         self.home_btn = QPushButton("Home")
         self.home_btn.clicked.connect(self.send_home)
-        self.home_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+        self.home_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold; font-size: 11pt;")
+        self.home_btn.setMinimumSize(140, 45)
         btn_layout.addWidget(self.home_btn)
 
         self.clear_btn = QPushButton("Clear All")
         self.clear_btn.clicked.connect(self.clear_points)
+        self.clear_btn.setMinimumSize(140, 45)
+        self.clear_btn.setFont(QFont("Arial", 11))
         btn_layout.addWidget(self.clear_btn)
 
         btn_layout.addStretch()  # Push buttons to top
