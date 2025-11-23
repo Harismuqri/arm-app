@@ -14,7 +14,7 @@ import pickle
 from multiprocessing import shared_memory
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                               QHBoxLayout, QLabel, QLineEdit, QPushButton,
-                              QGroupBox, QGridLayout)
+                              QGroupBox, QGridLayout, QSizePolicy)
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap, QFont, QColor
 import PySpin
@@ -375,26 +375,34 @@ class CoordinateTester(QMainWindow):
         det_group = QGroupBox("Detection Camera (Workspace View)")
         det_layout = QVBoxLayout()
         self.detection_label = ClickableLabel()  # Use ClickableLabel for click detection
-        self.detection_label.setMinimumSize(640, 480)
+        self.detection_label.setMinimumSize(400, 300)  # Smaller minimum for flexibility
+        self.detection_label.setSizePolicy(
+            QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        )
         self.detection_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.detection_label.setStyleSheet("border: 2px solid #555; background-color: #2a2a2a;")
         self.detection_label.clicked.connect(self.on_detection_click)  # Connect click signal
+        self.detection_label.setScaledContents(False)  # Keep aspect ratio
         det_layout.addWidget(self.detection_label)
         det_group.setLayout(det_layout)
-        cameras_layout.addWidget(det_group)
+        cameras_layout.addWidget(det_group, 1)  # Stretch factor 1
 
         # Inspection camera view
         insp_group = QGroupBox("Inspection Camera (Gripper View)")
         insp_layout = QVBoxLayout()
         self.inspection_label = QLabel()
-        self.inspection_label.setMinimumSize(640, 480)
+        self.inspection_label.setMinimumSize(400, 300)  # Smaller minimum for flexibility
+        self.inspection_label.setSizePolicy(
+            QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        )
         self.inspection_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.inspection_label.setStyleSheet("border: 2px solid #555; background-color: #2a2a2a;")
+        self.inspection_label.setScaledContents(False)  # Keep aspect ratio
         insp_layout.addWidget(self.inspection_label)
         insp_group.setLayout(insp_layout)
-        cameras_layout.addWidget(insp_group)
+        cameras_layout.addWidget(insp_group, 1)  # Stretch factor 1
 
-        layout.addLayout(cameras_layout)
+        layout.addLayout(cameras_layout, 1)  # Add stretch factor to make cameras expand
 
         # Info label
         self.info_label = QLabel("Enter coordinates and angle (0-180°) then click 'Inspect Target' to position inspection camera")
