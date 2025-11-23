@@ -21,10 +21,6 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap, QFont, QColor
 
-# Get script directory for finding config.json
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(SCRIPT_DIR, "config.json")
-
 # YOLO import - MUST be before PySpin to avoid DLL loading issues
 from ultralytics import YOLO
 
@@ -294,12 +290,19 @@ class CoordinateTester(QMainWindow):
         self.timer.timeout.connect(self.update_cameras)
         self.timer.start(33)  # ~30 FPS
 
-    def load_config(self):
-        """Load configuration from file"""
-        if os.path.exists(CONFIG_PATH):
-            with open(CONFIG_PATH, 'r') as f:
-                return json.load(f)
-        return {}
+    def load_config(self, path="config.json"):
+        """Load configuration from JSON file"""
+        try:
+            if not os.path.isabs(path):
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+                path = os.path.join(base_dir, path)
+
+            with open(path, "r") as f:
+                config = json.load(f)
+                return config
+        except Exception as e:
+            print(f"[ERROR] Config load failed: {e}")
+            return {}
 
     def load_yolo_model(self):
         """Load YOLO model from config"""
