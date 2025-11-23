@@ -132,7 +132,7 @@ class InspectDataManager:
         try:
             self.shm = shared_memory.SharedMemory(name=self.name, create=True, size=self.size)
             print(f"[INFO] Created inspect data shared memory: {self.name}")
-            initial_data = {"inspect": False, "target_x": 0, "target_y": 0, "angle": 0.0, "offset_x": CAMERA_OFFSET_X, "offset_y": CAMERA_OFFSET_Y, "timestamp": 0, "processed": True}
+            initial_data = {"inspect": False, "home": False, "target_x": 0, "target_y": 0, "angle": 0.0, "offset_x": CAMERA_OFFSET_X, "offset_y": CAMERA_OFFSET_Y, "timestamp": 0, "processed": True}
             self._write_data(initial_data)
         except FileExistsError:
             self.shm = shared_memory.SharedMemory(name=self.name, create=False)
@@ -159,7 +159,7 @@ class InspectDataManager:
         try:
             length = struct.unpack('I', bytes(self.shm.buf[:4]))[0]
             if length == 0 or length > self.size - 4:
-                return {"inspect": False, "target_x": 0, "target_y": 0, "angle": 0.0, "offset_x": CAMERA_OFFSET_X, "offset_y": CAMERA_OFFSET_Y, "timestamp": 0, "processed": True}
+                return {"inspect": False, "home": False, "target_x": 0, "target_y": 0, "angle": 0.0, "offset_x": CAMERA_OFFSET_X, "offset_y": CAMERA_OFFSET_Y, "timestamp": 0, "processed": True}
 
             json_bytes = bytes(self.shm.buf[4:4+length])
             json_str = json_bytes.decode('utf-8')
@@ -1164,6 +1164,27 @@ class XArmClickController:
 
     def process_inspect(self, inspect_data):
         """Process inspection command."""
+        timestamp = inspect_data.get("timestamp", 0)
+
+        # Ignore old or duplicate commands
+        if timestamp <= self.last_processed_inspect_time:
+            return
+
+        # Check if this is a home command
+        is_home = inspect_data.get("home", False)
+        if is_home:
+            print(f"\n[HOME COMMAND] Moving robot to home position...")
+            self.arm.check_and_recover()
+            success = self.arm.go_home()
+            if success:
+                print("[SUCCESS] Robot returned to home position!")
+            else:
+                print("[ERROR] Failed to return home!")
+            self.inspect_manager.mark_processed()
+            self.last_processed_inspect_time = timestamp
+            return
+
+        # Regular inspection command
         target_x = inspect_data.get("target_x", 0)
         target_y = inspect_data.get("target_y", 0)
         angle = inspect_data.get("angle", 0.0)
@@ -1171,11 +1192,6 @@ class XArmClickController:
         height = inspect_data.get("height", 0.0)
         offset_x = inspect_data.get("offset_x", CAMERA_OFFSET_X)
         offset_y = inspect_data.get("offset_y", CAMERA_OFFSET_Y)
-        timestamp = inspect_data.get("timestamp", 0)
-
-        # Ignore old or duplicate commands
-        if timestamp <= self.last_processed_inspect_time:
-            return
 
         print(f"\n[INSPECT COMMAND] Target: ({target_x:.1f}, {target_y:.1f}) mm - Angle: {angle:.1f}°")
 

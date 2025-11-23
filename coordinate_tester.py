@@ -217,11 +217,31 @@ class InspectDataManager:
         camera_offset = self.get_camera_offset_from_config()
         data = {
             "inspect": True,
+            "home": False,
             "target_x": float(target_x),
             "target_y": float(target_y),
             "angle": float(angle),
             "width": float(width),
             "height": float(height),
+            "offset_x": camera_offset.get("offset_x", 7.0),
+            "offset_y": camera_offset.get("offset_y", 92.9),
+            "offset_error": camera_offset.get("offset_error", 0.0),
+            "timestamp": time.time(),
+            "processed": False
+        }
+        return self._write_data(data)
+
+    def send_home_command(self):
+        """Send command to move robot to home position."""
+        camera_offset = self.get_camera_offset_from_config()
+        data = {
+            "inspect": False,
+            "home": True,
+            "target_x": 0,
+            "target_y": 0,
+            "angle": 0.0,
+            "width": 0.0,
+            "height": 0.0,
             "offset_x": camera_offset.get("offset_x", 7.0),
             "offset_y": camera_offset.get("offset_y", 92.9),
             "offset_error": camera_offset.get("offset_error", 0.0),
@@ -410,6 +430,11 @@ class CoordinateTester(QMainWindow):
         self.send_robot_btn.setStyleSheet("background-color: #FF9800; color: white; font-weight: bold;")
         btn_layout.addWidget(self.send_robot_btn)
 
+        self.home_btn = QPushButton("Home")
+        self.home_btn.clicked.connect(self.send_home)
+        self.home_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+        btn_layout.addWidget(self.home_btn)
+
         self.clear_btn = QPushButton("Clear All")
         self.clear_btn.clicked.connect(self.clear_points)
         btn_layout.addWidget(self.clear_btn)
@@ -580,6 +605,24 @@ class CoordinateTester(QMainWindow):
 
         except ValueError:
             self.info_label.setText("✗ Error: Please enter valid numbers for X, Y, and Angle")
+
+    def send_home(self):
+        """Send home command to robot via shared memory"""
+        try:
+            if self.inspect_data_mgr is None:
+                self.info_label.setText("✗ Error: Robot inspection control not connected")
+                return
+
+            # Send home command to robot
+            if self.inspect_data_mgr.send_home_command():
+                self.info_label.setText("✓ Home command sent - Robot moving to home position")
+                print(f"[INFO] Sent home command to robot")
+                self.status_label.setText("Status: Robot moving to home position...")
+            else:
+                self.info_label.setText("✗ Error: Failed to send home command")
+
+        except Exception as e:
+            self.info_label.setText(f"✗ Error: {str(e)}")
 
     def on_detection_click(self, x, y):
         """Handle click on detection camera - show info panel with coordinates and auto-fill angle if clicked on object"""
