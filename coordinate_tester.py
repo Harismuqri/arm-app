@@ -26,9 +26,13 @@ from PyQt6.QtGui import QImage, QPixmap, QFont, QColor
 YOLO_AVAILABLE = False
 YOLO = None
 
+# Get script directory for finding config.json
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_PATH = os.path.join(SCRIPT_DIR, "config.json")
+
 # Check if YOLO model file exists before importing (prevents PyTorch DLL loading if not needed)
-if os.path.exists("config.json"):
-    with open("config.json", 'r') as f:
+if os.path.exists(CONFIG_PATH):
+    with open(CONFIG_PATH, 'r') as f:
         temp_config = json.load(f)
         model_path = temp_config.get("yolo_model_path")
         if model_path and os.path.exists(model_path):
@@ -44,7 +48,8 @@ if os.path.exists("config.json"):
             print(f"[INFO] Expected path: {model_path}")
             print("[INFO] Coordinate tester will work with manual angle input only")
 else:
-    print("[INFO] config.json not found - YOLO disabled")
+    print(f"[INFO] config.json not found at: {CONFIG_PATH}")
+    print("[INFO] YOLO disabled")
 
 # PySpin import - MUST be after YOLO
 import PySpin
@@ -314,9 +319,8 @@ class CoordinateTester(QMainWindow):
 
     def load_config(self):
         """Load configuration from file"""
-        config_path = "config.json"
-        if os.path.exists(config_path):
-            with open(config_path, 'r') as f:
+        if os.path.exists(CONFIG_PATH):
+            with open(CONFIG_PATH, 'r') as f:
                 return json.load(f)
         return {}
 
