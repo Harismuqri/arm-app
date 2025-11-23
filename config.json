@@ -35,7 +35,8 @@
     "camera_offset": {
         "offset_x": 0.8,
         "offset_y": 85.3,
-        "offset_error": 0
+        "offset_error_x": 0.0,
+        "offset_error_y": 0.0
     },
     "workspace": {
         "width": 300,

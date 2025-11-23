@@ -24,7 +24,8 @@ INSPECT_MEMORY_SIZE = 512
 # Camera offset configuration (mm) - Calibrated values
 CAMERA_OFFSET_X = 0.8
 CAMERA_OFFSET_Y = 85.3
-CAMERA_OFFSET_ERROR = 0.0
+CAMERA_OFFSET_ERROR_X = 0.0
+CAMERA_OFFSET_ERROR_Y = 0.0
 
 # Robot workspace boundaries (mm) - actual robot coordinates
 ROBOT_MIN_X = 88.9
@@ -199,13 +200,14 @@ class InspectDataManager:
             "height": float(height),
             "offset_x": CAMERA_OFFSET_X,
             "offset_y": CAMERA_OFFSET_Y,
-            "offset_error": CAMERA_OFFSET_ERROR,
+            "offset_error_x": CAMERA_OFFSET_ERROR_X,
+            "offset_error_y": CAMERA_OFFSET_ERROR_Y,
             "timestamp": time.time(),
             "processed": False
         }
         self._write_data(data)
         print(f"[INSPECT] Inspection command sent: Target ({target_x:.1f}, {target_y:.1f}) mm - Angle: {angle:.1f}°")
-        print(f"[INSPECT] Camera offset: ({CAMERA_OFFSET_X:.1f}, {CAMERA_OFFSET_Y:.1f}) ± {CAMERA_OFFSET_ERROR:.1f} mm")
+        print(f"[INSPECT] Camera offset: ({CAMERA_OFFSET_X:.1f}, {CAMERA_OFFSET_Y:.1f}) ± ({CAMERA_OFFSET_ERROR_X:.1f}, {CAMERA_OFFSET_ERROR_Y:.1f}) mm")
 
     def cleanup(self):
         """Close and unlink shared memory."""
@@ -768,7 +770,7 @@ class XArmController:
             print(f"{'='*60}\n")
             return False
 
-    def inspect_sequence(self, target_det_x, target_det_y, object_angle=0.0, object_width=0.0, object_height=0.0, offset_x=CAMERA_OFFSET_X, offset_y=CAMERA_OFFSET_Y, offset_error=CAMERA_OFFSET_ERROR):
+    def inspect_sequence(self, target_det_x, target_det_y, object_angle=0.0, object_width=0.0, object_height=0.0, offset_x=CAMERA_OFFSET_X, offset_y=CAMERA_OFFSET_Y, offset_error_x=CAMERA_OFFSET_ERROR_X, offset_error_y=CAMERA_OFFSET_ERROR_Y):
         """
         Execute inspection sequence - move gripper so inspection camera views target.
 
@@ -781,7 +783,7 @@ class XArmController:
             object_angle: Object angle in degrees (0-180) - used to calculate optimal camera angle
             object_width, object_height: Object dimensions in mm (if 0, uses simple manual mode)
             offset_x, offset_y: Camera offset from gripper center point (mm)
-            offset_error: Additional offset compensation for angle-dependent positioning (mm)
+            offset_error_x, offset_error_y: Additional offset compensation for x and y directions (mm)
         """
         try:
             import math
@@ -795,9 +797,13 @@ class XArmController:
                 # Calculate camera angle for gripper rotation
                 camera_angle = self.calculate_optimal_inspect_angle(object_angle)
 
-                # Calculate offset magnitude with error compensation
-                offset_magnitude = math.sqrt(offset_x**2 + offset_y**2) + offset_error
-                camera_offset_angle_in_gripper = math.degrees(math.atan2(offset_y, offset_x))
+                # Apply offset errors to base offsets
+                effective_offset_x = offset_x + offset_error_x
+                effective_offset_y = offset_y + offset_error_y
+
+                # Calculate offset magnitude and angle
+                offset_magnitude = math.sqrt(effective_offset_x**2 + effective_offset_y**2)
+                camera_offset_angle_in_gripper = math.degrees(math.atan2(effective_offset_y, effective_offset_x))
 
                 # Offset direction in workspace when gripper is at camera_angle
                 offset_angle_in_workspace = camera_angle + camera_offset_angle_in_gripper
@@ -811,8 +817,9 @@ class XArmController:
                 gripper_det_y = target_det_y - offset_y_ws
 
                 print(f"[Inspect] Camera angle: {camera_angle:.1f}°")
-                print(f"[Inspect] Offset magnitude: {offset_magnitude:.1f} mm (base: {math.sqrt(offset_x**2 + offset_y**2):.1f} + error: {offset_error:.1f})")
-                print(f"[Inspect] Offset: (-{offset_x_ws:.1f}, -{offset_y_ws:.1f}) mm")
+                print(f"[Inspect] Offset: ({offset_x:.1f}, {offset_y:.1f}) + error: ({offset_error_x:.1f}, {offset_error_y:.1f}) = ({effective_offset_x:.1f}, {effective_offset_y:.1f}) mm")
+                print(f"[Inspect] Offset magnitude: {offset_magnitude:.1f} mm")
+                print(f"[Inspect] Workspace offset: (-{offset_x_ws:.1f}, -{offset_y_ws:.1f}) mm")
                 print(f"[Inspect] Gripper position: ({gripper_det_x:.1f}, {gripper_det_y:.1f}) mm")
                 print(f"{'='*60}\n")
 
@@ -821,12 +828,15 @@ class XArmController:
                 # Calculate camera angle for gripper rotation
                 camera_angle = self.calculate_optimal_inspect_angle(object_angle)
 
-                # Calculate offset magnitude from camera offset in gripper frame with error compensation
-                offset_magnitude = math.sqrt(offset_x**2 + offset_y**2) + offset_error
+                # Apply offset errors to base offsets
+                effective_offset_x = offset_x + offset_error_x
+                effective_offset_y = offset_y + offset_error_y
+
+                # Calculate offset magnitude from camera offset in gripper frame
+                offset_magnitude = math.sqrt(effective_offset_x**2 + effective_offset_y**2)
 
                 # Camera offset angle in gripper's local frame
-                # offset_x=7mm, offset_y=92.9mm means the camera is at ~85.7° in gripper frame
-                camera_offset_angle_in_gripper = math.degrees(math.atan2(offset_y, offset_x))
+                camera_offset_angle_in_gripper = math.degrees(math.atan2(effective_offset_y, effective_offset_x))
 
                 # When gripper rotates to camera_angle, the offset direction in workspace is:
                 # camera_angle + camera_offset_angle_in_gripper
@@ -859,7 +869,8 @@ class XArmController:
                 print(f"\n{'='*60}")
                 print(f"[Inspect] CAMERA-FRAME-BASED POSITIONING")
                 print(f"[Inspect] Target: ({target_det_x:.1f}, {target_det_y:.1f}) mm")
-                print(f"[Inspect] Camera offset magnitude: {offset_magnitude:.1f} mm (base: {math.sqrt(offset_x**2 + offset_y**2):.1f} + error: {offset_error:.1f})")
+                print(f"[Inspect] Offset: ({offset_x:.1f}, {offset_y:.1f}) + error: ({offset_error_x:.1f}, {offset_error_y:.1f}) = ({effective_offset_x:.1f}, {effective_offset_y:.1f}) mm")
+                print(f"[Inspect] Offset magnitude: {offset_magnitude:.1f} mm")
                 print(f"[Inspect] Testing 4 possible offset orientations...")
 
                 # Test all 4 offset directions relative to camera angle
@@ -1061,7 +1072,7 @@ class XArmClickController:
         print("  • 'T' KEY → Inspect selected object")
         print("\nNote: You MUST place before you can pick again!")
         print(f"\nInspection:")
-        print(f"  • Camera offset: ({CAMERA_OFFSET_X:.1f}, {CAMERA_OFFSET_Y:.1f}) ± {CAMERA_OFFSET_ERROR:.1f} mm")
+        print(f"  • Camera offset: ({CAMERA_OFFSET_X:.1f}, {CAMERA_OFFSET_Y:.1f}) ± ({CAMERA_OFFSET_ERROR_X:.1f}, {CAMERA_OFFSET_ERROR_Y:.1f}) mm")
         print(f"\nWorkspace: X=[{self.workspace_min_x}-{self.workspace_max_x}], "
               f"Y=[{self.workspace_min_y}-{self.workspace_max_y}]")
         print(f"Safe height: {self.arm.safe_height}mm, Pick height: {self.arm.pick_height}mm")
@@ -1194,7 +1205,8 @@ class XArmClickController:
         height = inspect_data.get("height", 0.0)
         offset_x = inspect_data.get("offset_x", CAMERA_OFFSET_X)
         offset_y = inspect_data.get("offset_y", CAMERA_OFFSET_Y)
-        offset_error = inspect_data.get("offset_error", CAMERA_OFFSET_ERROR)
+        offset_error_x = inspect_data.get("offset_error_x", CAMERA_OFFSET_ERROR_X)
+        offset_error_y = inspect_data.get("offset_error_y", CAMERA_OFFSET_ERROR_Y)
 
         print(f"\n[INSPECT COMMAND] Target: ({target_x:.1f}, {target_y:.1f}) mm - Angle: {angle:.1f}°")
 
@@ -1211,7 +1223,7 @@ class XArmClickController:
 
         # Execute inspection sequence with object angle and dimensions
         print("[INFO] Executing inspection sequence...")
-        success = self.arm.inspect_sequence(target_x, target_y, object_angle=angle, object_width=width, object_height=height, offset_x=offset_x, offset_y=offset_y, offset_error=offset_error)
+        success = self.arm.inspect_sequence(target_x, target_y, object_angle=angle, object_width=width, object_height=height, offset_x=offset_x, offset_y=offset_y, offset_error_x=offset_error_x, offset_error_y=offset_error_y)
 
         if success:
             print("[SUCCESS] Inspection position reached!")
