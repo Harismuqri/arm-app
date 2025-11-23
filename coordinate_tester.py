@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap, QFont, QColor
 import PySpin
+from ultralytics import YOLO
 
 
 class ClickableLabel(QLabel):
@@ -260,6 +261,11 @@ class CoordinateTester(QMainWindow):
         self.show_info_panel = False
         self.clicked_workspace_pos = None  # Store clicked position in workspace coordinates (x_mm, y_mm)
 
+        # YOLO detection
+        self.model = None
+        self.detected_objects = []  # List of detected objects with their properties
+        self.load_yolo_model()
+
         # Robot control - using InspectData for inspection commands
         self.inspect_data_mgr = None
         try:
@@ -284,6 +290,52 @@ class CoordinateTester(QMainWindow):
             with open(config_path, 'r') as f:
                 return json.load(f)
         return {}
+
+    def load_yolo_model(self):
+        """Load YOLO model from config"""
+        model_path = self.config.get("yolo_model_path")
+        if model_path and os.path.exists(model_path):
+            try:
+                self.model = YOLO(model_path)
+                print(f"[INFO] YOLO model loaded: {model_path}")
+            except Exception as e:
+                print(f"[WARNING] Failed to load YOLO model: {e}")
+                self.model = None
+        else:
+            print(f"[WARNING] YOLO model path not found in config or file doesn't exist")
+            self.model = None
+
+    def get_angle(self, obb_pts):
+        """Calculate angle from OBB points (same as arm-app-v1.1.py)"""
+        v1 = obb_pts[1] - obb_pts[0]
+        v2 = obb_pts[2] - obb_pts[1]
+        len1 = np.linalg.norm(v1)
+        len2 = np.linalg.norm(v2)
+        long_vec = v1 if len1 >= len2 else v2
+        angle_rad = np.arctan2(long_vec[1], long_vec[0])
+        angle_deg = np.degrees(angle_rad)
+        if angle_deg < 0:
+            angle_deg += 180
+        return angle_deg
+
+    def point_in_polygon(self, point, polygon):
+        """Check if point is inside polygon using cv2.pointPolygonTest"""
+        return cv2.pointPolygonTest(polygon.astype(np.float32), point, False) >= 0
+
+    def transform_points(self, points, matrix):
+        """Transform points using homography matrix"""
+        if len(points.shape) == 1:
+            points = points.reshape(-1, 2)
+        pts = points.reshape(-1, 1, 2).astype(np.float32)
+        transformed = cv2.perspectiveTransform(pts, matrix)
+        return transformed.reshape(-1, 2)
+
+    def is_inside_workspace(self, pts):
+        """Check if points are inside workspace boundaries"""
+        workspace_width = self.config.get("workspace", {}).get("width", 300)
+        workspace_height = self.config.get("workspace", {}).get("height", 300)
+        x, y = pts[:, 0], pts[:, 1]
+        return np.all((x >= 0) & (x <= workspace_width) & (y >= 0) & (y <= workspace_height))
 
     def load_calibration(self):
         """Load calibration matrix from homography_auto.pkl"""
@@ -526,34 +578,49 @@ class CoordinateTester(QMainWindow):
             self.info_label.setText("✗ Error: Please enter valid numbers for X, Y, and Angle")
 
     def on_detection_click(self, x, y):
-        """Handle click on detection camera - show info panel with coordinates"""
+        """Handle click on detection camera - show info panel with coordinates and auto-fill angle if clicked on object"""
         self.mouse_click_x = x
         self.mouse_click_y = y
         self.show_info_panel = True
 
-        # Convert click position to workspace coordinates
-        if self.H_camera_to_workspace is not None:
-            click_pt = np.array([[x, y]], dtype=np.float32).reshape(-1, 1, 2)
-            workspace_coord = cv2.perspectiveTransform(click_pt, self.H_camera_to_workspace).reshape(-1, 2)
-            click_x_mm = workspace_coord[0][0]
-            click_y_mm = workspace_coord[0][1]
-            self.clicked_workspace_pos = (click_x_mm, click_y_mm)
+        # Check if clicked on any detected object
+        clicked_on_object = False
+        for obj_data in self.detected_objects:
+            if self.point_in_polygon((x, y), obj_data['corners']):
+                clicked_on_object = True
+                # Auto-fill coordinates and angle from detected object
+                self.x_input.setText(f"{obj_data['x_mm']:.1f}")
+                self.y_input.setText(f"{obj_data['y_mm']:.1f}")
+                self.angle_input.setText(f"{obj_data['angle']:.0f}")
 
-            # Auto-fill coordinates in input fields
-            self.x_input.setText(f"{click_x_mm:.1f}")
-            self.y_input.setText(f"{click_y_mm:.1f}")
+                self.clicked_workspace_pos = (obj_data['x_mm'], obj_data['y_mm'])
+                self.status_label.setText(f"Status: Object {obj_data['id']} - ({obj_data['x_mm']:.1f}, {obj_data['y_mm']:.1f}) mm, Angle: {obj_data['angle']:.1f}° ✓")
+                break
 
-            # Check if inside workspace
-            workspace_width = self.config.get("workspace", {}).get("width", 300)
-            workspace_height = self.config.get("workspace", {}).get("height", 300)
+        # If not clicked on object, convert click position to workspace coordinates
+        if not clicked_on_object:
+            if self.H_camera_to_workspace is not None:
+                click_pt = np.array([[x, y]], dtype=np.float32).reshape(-1, 1, 2)
+                workspace_coord = cv2.perspectiveTransform(click_pt, self.H_camera_to_workspace).reshape(-1, 2)
+                click_x_mm = workspace_coord[0][0]
+                click_y_mm = workspace_coord[0][1]
+                self.clicked_workspace_pos = (click_x_mm, click_y_mm)
 
-            if 0 <= click_x_mm <= workspace_width and 0 <= click_y_mm <= workspace_height:
-                self.status_label.setText(f"Status: Clicked at ({click_x_mm:.1f}, {click_y_mm:.1f}) mm - In workspace ✓")
+                # Auto-fill coordinates in input fields (angle stays at current value)
+                self.x_input.setText(f"{click_x_mm:.1f}")
+                self.y_input.setText(f"{click_y_mm:.1f}")
+
+                # Check if inside workspace
+                workspace_width = self.config.get("workspace", {}).get("width", 300)
+                workspace_height = self.config.get("workspace", {}).get("height", 300)
+
+                if 0 <= click_x_mm <= workspace_width and 0 <= click_y_mm <= workspace_height:
+                    self.status_label.setText(f"Status: Clicked at ({click_x_mm:.1f}, {click_y_mm:.1f}) mm - In workspace ✓")
+                else:
+                    self.status_label.setText(f"Status: Clicked at ({click_x_mm:.1f}, {click_y_mm:.1f}) mm - Outside workspace")
             else:
-                self.status_label.setText(f"Status: Clicked at ({click_x_mm:.1f}, {click_y_mm:.1f}) mm - Outside workspace")
-        else:
-            self.clicked_workspace_pos = None
-            self.status_label.setText(f"Status: Clicked at pixel ({x}, {y}) - No calibration")
+                self.clicked_workspace_pos = None
+                self.status_label.setText(f"Status: Clicked at pixel ({x}, {y}) - No calibration")
 
     def on_angle_changed(self):
         """Called when angle input changes - no action needed, display updates automatically"""
@@ -623,6 +690,68 @@ class CoordinateTester(QMainWindow):
                         return
 
                     image_result.Release()
+
+                    # Run YOLO detection if model is loaded
+                    self.detected_objects = []  # Clear previous detections
+                    if self.model is not None:
+                        try:
+                            results = self.model(frame, conf=self.config.get("detection_confidence", 0.7))
+                            if results and len(results) > 0 and hasattr(results[0], 'obb') and results[0].obb is not None:
+                                obb_preds = results[0].obb
+
+                                for i, obb in enumerate(obb_preds, 1):
+                                    if hasattr(obb, "xyxyxyxy"):
+                                        corners = obb.xyxyxyxy.cpu().numpy().reshape(-1, 2)
+                                    elif hasattr(obb, "xyxy"):
+                                        corners = obb.xyxy.cpu().numpy().reshape(-1, 2)
+                                    else:
+                                        continue
+
+                                    # Transform corners to workspace coordinates
+                                    if self.H_camera_to_workspace is not None:
+                                        transformed = self.transform_points(corners, self.H_camera_to_workspace)
+                                        is_inside = self.is_inside_workspace(transformed)
+
+                                        if is_inside:
+                                            # Calculate object properties in workspace coordinates
+                                            center = np.mean(transformed, axis=0)
+                                            angle = self.get_angle(transformed)
+
+                                            side1 = np.linalg.norm(transformed[1] - transformed[0])
+                                            side2 = np.linalg.norm(transformed[2] - transformed[1])
+                                            width_mm = round(max(side1, side2), 1)
+                                            height_mm = round(min(side1, side2), 1)
+
+                                            x_mm, y_mm = round(center[0], 1), round(center[1], 1)
+                                            angle_deg = round(angle, 1)
+
+                                            # Store object data
+                                            self.detected_objects.append({
+                                                'id': i,
+                                                'corners': corners.astype(int),
+                                                'x_mm': x_mm,
+                                                'y_mm': y_mm,
+                                                'angle': angle_deg,
+                                                'width': width_mm,
+                                                'height': height_mm
+                                            })
+
+                                            # Draw bounding box (green for inside workspace)
+                                            corners_int = corners.astype(int)
+                                            cv2.polylines(frame, [corners_int], isClosed=True, color=(0, 255, 0), thickness=2)
+
+                                            # Draw center point
+                                            center_img = np.mean(corners, axis=0).astype(int)
+                                            cv2.circle(frame, tuple(center_img), 5, (0, 0, 255), -1)
+                                            cv2.circle(frame, tuple(center_img), 5, (255, 255, 255), 1)
+
+                                            # Draw object label with angle
+                                            label_pos = tuple(corners_int[0] - [0, 10])
+                                            label_text = f"Obj {i}: {angle_deg:.0f}°"
+                                            cv2.putText(frame, label_text, label_pos,
+                                                      cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
+                        except Exception as e:
+                            print(f"[DEBUG] YOLO detection error: {e}")
 
                     # Draw test points
                     if self.H_workspace_to_camera is not None:
