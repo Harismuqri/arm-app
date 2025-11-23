@@ -339,6 +339,7 @@ class CoordinateTester(QMainWindow):
         self.angle_input = QLineEdit()
         self.angle_input.setPlaceholderText("Enter angle (0-180)")
         self.angle_input.setText("0")  # Default to 0 degrees
+        self.angle_input.textChanged.connect(self.on_angle_changed)  # Update display when angle changes
         input_layout.addWidget(self.angle_input, 2, 1)
 
         # Buttons
@@ -530,6 +531,10 @@ class CoordinateTester(QMainWindow):
             click_y_mm = workspace_coord[0][1]
             self.clicked_workspace_pos = (click_x_mm, click_y_mm)
 
+            # Auto-fill coordinates in input fields
+            self.x_input.setText(f"{click_x_mm:.1f}")
+            self.y_input.setText(f"{click_y_mm:.1f}")
+
             # Check if inside workspace
             workspace_width = self.config.get("workspace", {}).get("width", 300)
             workspace_height = self.config.get("workspace", {}).get("height", 300)
@@ -541,6 +546,10 @@ class CoordinateTester(QMainWindow):
         else:
             self.clicked_workspace_pos = None
             self.status_label.setText(f"Status: Clicked at pixel ({x}, {y}) - No calibration")
+
+    def on_angle_changed(self):
+        """Called when angle input changes - no action needed, display updates automatically"""
+        pass
 
     def draw_info_panel_on_frame(self, frame, x, y, info_lines, title="Info"):
         """Draw an information panel at specified position"""
@@ -637,6 +646,44 @@ class CoordinateTester(QMainWindow):
                         camera_corners = cv2.perspectiveTransform(workspace_corners, self.H_workspace_to_camera)
                         camera_corners = camera_corners.astype(np.int32)
                         cv2.polylines(frame, [camera_corners], isClosed=True, color=(0, 255, 255), thickness=2)
+
+                        # Draw angle indicator at current input position
+                        try:
+                            if self.x_input.text() and self.y_input.text() and self.angle_input.text():
+                                target_x_mm = float(self.x_input.text())
+                                target_y_mm = float(self.y_input.text())
+                                angle_deg = float(self.angle_input.text())
+
+                                # Convert workspace position to camera pixels
+                                target_pt = np.array([[[target_x_mm, target_y_mm]]], dtype=np.float32)
+                                target_px = cv2.perspectiveTransform(target_pt, self.H_workspace_to_camera)
+                                center_x = int(target_px[0][0][0])
+                                center_y = int(target_px[0][0][1])
+
+                                if 0 <= center_x < width and 0 <= center_y < height:
+                                    # Draw angle indicator line
+                                    # Line length in pixels
+                                    line_length = 50
+
+                                    # Convert angle to radians (0° = horizontal right, counter-clockwise)
+                                    angle_rad = np.radians(angle_deg)
+
+                                    # Calculate end point of angle line
+                                    end_x = int(center_x + line_length * np.cos(angle_rad))
+                                    end_y = int(center_y - line_length * np.sin(angle_rad))  # Subtract because Y increases downward
+
+                                    # Draw the angle indicator line
+                                    cv2.line(frame, (center_x, center_y), (end_x, end_y), (255, 0, 255), 2, cv2.LINE_AA)
+
+                                    # Draw arrowhead at end
+                                    cv2.arrowedLine(frame, (center_x, center_y), (end_x, end_y), (255, 0, 255), 2, cv2.LINE_AA, tipLength=0.3)
+
+                                    # Draw angle label
+                                    label = f"{angle_deg:.0f}°"
+                                    label_pos = (center_x + 10, center_y - 10)
+                                    cv2.putText(frame, label, label_pos, cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2, cv2.LINE_AA)
+                        except (ValueError, AttributeError):
+                            pass  # Ignore if inputs are invalid
 
                     # Draw info panel if showing coordinates
                     if self.show_info_panel and self.clicked_workspace_pos is not None:
