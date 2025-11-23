@@ -10,7 +10,6 @@ import os
 import time
 import struct
 import pickle
-import gc
 from multiprocessing import shared_memory
 
 # Third-party imports
@@ -927,20 +926,12 @@ class CoordinateTester(QMainWindow):
                     print(f"[ERROR] Inspection camera update failed: {error_msg}")
 
     def closeEvent(self, event):
-        """Clean up when closing"""
-        self.timer.stop()
+        """Handle window close event"""
+        # Stop timer
+        if hasattr(self, 'timer'):
+            self.timer.stop()
 
-        # Clean up YOLO model FIRST (before PySpin cleanup)
-        if self.model:
-            try:
-                del self.model
-                self.model = None
-                gc.collect()  # Force garbage collection to free PyTorch resources
-                time.sleep(0.1)  # Brief delay to allow PyTorch DLL cleanup
-            except:
-                pass
-
-        # Clean up detection camera
+        # Cleanup cameras
         if self.detection_camera:
             try:
                 self.detection_camera.EndAcquisition()
@@ -948,7 +939,6 @@ class CoordinateTester(QMainWindow):
             except:
                 pass
 
-        # Clean up inspection camera
         if self.inspection_camera:
             try:
                 self.inspection_camera.EndAcquisition()
@@ -956,19 +946,11 @@ class CoordinateTester(QMainWindow):
             except:
                 pass
 
-        # Clean up camera system
         if self.system:
             try:
                 cam_list = self.system.GetCameras()
                 cam_list.Clear()
                 self.system.ReleaseInstance()
-            except:
-                pass
-
-        # Clean up shared memory
-        if self.inspect_data_mgr:
-            try:
-                self.inspect_data_mgr.cleanup()
             except:
                 pass
 
@@ -992,8 +974,7 @@ def main():
 
     window = CoordinateTester()
     window.show()
-    app.exec()
-    os._exit(0)  # Use os._exit to skip Python cleanup and avoid PyTorch/PySpin DLL conflict
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
