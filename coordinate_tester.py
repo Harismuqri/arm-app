@@ -638,6 +638,45 @@ class CoordinateTester(QMainWindow):
         self.test_points.clear()
         self.info_label.setText("All points cleared")
 
+    def get_error_offset_for_angle(self, angle):
+        """
+        Calculate error offset based on angle range.
+        Adjust the values in each range to calibrate for different angles.
+
+        Returns: (error_x, error_y) tuple
+        """
+        # Normalize angle to 0-180° range
+        angle_norm = angle % 180
+
+        # Apply error offset based on angle range
+        # TODO: Adjust these values when you find perfect error offset values
+        if 0 <= angle_norm < 50:
+            # Angle 0-49°: Base position, no error correction needed
+            error_x = 0.0
+            error_y = 0.0
+        elif 50 <= angle_norm < 80:
+            # Angle 50-79°: Adjust these values based on testing
+            error_x = 0.0
+            error_y = 0.0
+        elif 80 <= angle_norm < 90:
+            # Angle 80-89°: Adjust these values based on testing
+            error_x = -2.0
+            error_y = -0.5
+        elif 90 <= angle_norm < 135:
+            # Angle 90-134°: Adjust these values based on testing
+            error_x = -2.0
+            error_y = -0.5
+        elif 135 <= angle_norm < 150:
+            # Angle 135-149°: Adjust these values based on testing
+            error_x = 0.0
+            error_y = 0.0
+        else:  # 150-180°
+            # Angle 150-180°: Adjust these values based on testing
+            error_x = 0.0
+            error_y = 0.0
+
+        return error_x, error_y
+
     def send_to_robot(self):
         """Send inspection command to robot via shared memory"""
         try:
@@ -646,8 +685,18 @@ class CoordinateTester(QMainWindow):
             angle = float(self.angle_input.text()) if self.angle_input.text() else 0.0
             offset_x = float(self.offset_x_input.text()) if self.offset_x_input.text() else 0.8
             offset_y = float(self.offset_y_input.text()) if self.offset_y_input.text() else 85.3
-            offset_error_x = float(self.offset_error_x_input.text()) if self.offset_error_x_input.text() else 0.0
-            offset_error_y = float(self.offset_error_y_input.text()) if self.offset_error_y_input.text() else 0.0
+
+            # Get angle-based error offset (automatically calculated)
+            auto_error_x, auto_error_y = self.get_error_offset_for_angle(angle)
+
+            # You can still override with manual input if needed
+            # If the input fields have non-zero values, they will override the automatic values
+            manual_error_x = float(self.offset_error_x_input.text()) if self.offset_error_x_input.text() else auto_error_x
+            manual_error_y = float(self.offset_error_y_input.text()) if self.offset_error_y_input.text() else auto_error_y
+
+            # Use manual values if they differ from 0, otherwise use automatic values
+            offset_error_x = manual_error_x if self.offset_error_x_input.text() and manual_error_x != 0.0 else auto_error_x
+            offset_error_y = manual_error_y if self.offset_error_y_input.text() and manual_error_y != 0.0 else auto_error_y
 
             if self.inspect_data_mgr is None:
                 self.info_label.setText("✗ Error: Robot inspection control not connected")
@@ -659,7 +708,7 @@ class CoordinateTester(QMainWindow):
             if self.inspect_data_mgr.send_inspect_command(x_mm, y_mm, angle=angle, width=0.0, height=0.0,
                                                           offset_x=offset_x, offset_y=offset_y, offset_error_x=offset_error_x, offset_error_y=offset_error_y):
                 self.info_label.setText(f"✓ Inspection sent: Target ({x_mm:.1f}, {y_mm:.1f}) mm, Angle: {angle:.1f}°, Offset: ({offset_x:.1f}, {offset_y:.1f}), Error: ({offset_error_x:.1f}, {offset_error_y:.1f})")
-                print(f"[INFO] Sent inspection command: Target ({x_mm:.1f}, {y_mm:.1f}) mm, Angle: {angle:.1f}°, Offset: ({offset_x:.1f}, {offset_y:.1f}), Error: ({offset_error_x:.1f}, {offset_error_y:.1f})")
+                print(f"[INFO] Sent inspection command: Target ({x_mm:.1f}, {y_mm:.1f}) mm, Angle: {angle:.1f}°, Offset: ({offset_x:.1f}, {offset_y:.1f}), Error: ({offset_error_x:.1f}, {offset_error_y:.1f}) [Auto-calculated from angle]")
             else:
                 self.info_label.setText("✗ Error: Failed to send inspection command")
 
