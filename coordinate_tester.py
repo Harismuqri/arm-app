@@ -18,7 +18,16 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap, QFont, QColor
 import PySpin
-from ultralytics import YOLO
+
+# Try to import YOLO - if it fails, continue without automatic detection
+try:
+    from ultralytics import YOLO
+    YOLO_AVAILABLE = True
+except Exception as e:
+    print(f"[WARNING] YOLO not available: {e}")
+    print("[INFO] Coordinate tester will work with manual angle input only")
+    YOLO_AVAILABLE = False
+    YOLO = None
 
 
 class ClickableLabel(QLabel):
@@ -293,6 +302,11 @@ class CoordinateTester(QMainWindow):
 
     def load_yolo_model(self):
         """Load YOLO model from config"""
+        if not YOLO_AVAILABLE:
+            print("[INFO] YOLO not available - automatic angle detection disabled")
+            self.model = None
+            return
+
         model_path = self.config.get("yolo_model_path")
         if model_path and os.path.exists(model_path):
             try:
