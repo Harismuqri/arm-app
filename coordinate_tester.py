@@ -974,7 +974,10 @@ def main():
 
     window = CoordinateTester()
     window.show()
-    sys.exit(app.exec())
+    app.exec()
+
+    # Use os._exit() to avoid PyTorch/PySpin DLL conflict on exit
+    os._exit(0)
 
 
 if __name__ == "__main__":
