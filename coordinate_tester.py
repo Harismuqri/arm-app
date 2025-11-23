@@ -10,6 +10,7 @@ import os
 import time
 import struct
 import pickle
+import gc
 from multiprocessing import shared_memory
 
 # Third-party imports
@@ -929,6 +930,16 @@ class CoordinateTester(QMainWindow):
         """Clean up when closing"""
         self.timer.stop()
 
+        # Clean up YOLO model FIRST (before PySpin cleanup)
+        if self.model:
+            try:
+                del self.model
+                self.model = None
+                gc.collect()  # Force garbage collection to free PyTorch resources
+                time.sleep(0.1)  # Brief delay to allow PyTorch DLL cleanup
+            except:
+                pass
+
         # Clean up detection camera
         if self.detection_camera:
             try:
@@ -981,7 +992,8 @@ def main():
 
     window = CoordinateTester()
     window.show()
-    sys.exit(app.exec())
+    app.exec()
+    os._exit(0)  # Use os._exit to skip Python cleanup and avoid PyTorch/PySpin DLL conflict
 
 
 if __name__ == "__main__":
