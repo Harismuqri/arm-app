@@ -21,9 +21,9 @@ CLICK_MEMORY_SIZE = 512
 INSPECT_MEMORY_NAME = "InspectData"
 INSPECT_MEMORY_SIZE = 512
 
-# Camera offset configuration (mm)
-CAMERA_OFFSET_X = 7
-CAMERA_OFFSET_Y = 92.9
+# Camera offset configuration (mm) - Calibrated values
+CAMERA_OFFSET_X = 0.8
+CAMERA_OFFSET_Y = 85.3
 CAMERA_OFFSET_ERROR = 0.0
 
 # Robot workspace boundaries (mm) - actual robot coordinates

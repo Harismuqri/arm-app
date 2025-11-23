@@ -176,8 +176,8 @@ class InspectDataManager:
                     "angle": 0.0,
                     "width": 0.0,
                     "height": 0.0,
-                    "offset_x": camera_offset.get("offset_x", 7.0),
-                    "offset_y": camera_offset.get("offset_y", 92.9),
+                    "offset_x": camera_offset.get("offset_x", 0.8),
+                    "offset_y": camera_offset.get("offset_y", 85.3),
                     "timestamp": 0,
                     "processed": True
                 })
@@ -191,10 +191,10 @@ class InspectDataManager:
             if os.path.exists("config.json"):
                 with open("config.json", "r") as f:
                     config = json.load(f)
-                    return config.get("camera_offset", {"offset_x": 7.0, "offset_y": 92.9, "offset_error": 0.0})
+                    return config.get("camera_offset", {"offset_x": 0.8, "offset_y": 85.3, "offset_error": 0.0})
         except:
             pass
-        return {"offset_x": 7.0, "offset_y": 92.9, "offset_error": 0.0}
+        return {"offset_x": 0.8, "offset_y": 85.3, "offset_error": 0.0}
 
     def _write_data(self, data):
         """Write data to shared memory as JSON."""
@@ -217,9 +217,9 @@ class InspectDataManager:
         camera_offset = self.get_camera_offset_from_config()
         # Use provided offsets or fall back to config
         if offset_x is None:
-            offset_x = camera_offset.get("offset_x", 7.0)
+            offset_x = camera_offset.get("offset_x", 0.8)
         if offset_y is None:
-            offset_y = camera_offset.get("offset_y", 92.9)
+            offset_y = camera_offset.get("offset_y", 85.3)
 
         data = {
             "inspect": True,
@@ -248,8 +248,8 @@ class InspectDataManager:
             "angle": 0.0,
             "width": 0.0,
             "height": 0.0,
-            "offset_x": camera_offset.get("offset_x", 7.0),
-            "offset_y": camera_offset.get("offset_y", 92.9),
+            "offset_x": camera_offset.get("offset_x", 0.8),
+            "offset_y": camera_offset.get("offset_y", 85.3),
             "offset_error": camera_offset.get("offset_error", 0.0),
             "timestamp": time.time(),
             "processed": False
@@ -428,14 +428,14 @@ class CoordinateTester(QMainWindow):
         input_layout.addWidget(QLabel("Offset X (mm):"), 3, 0)
         self.offset_x_input = QLineEdit()
         self.offset_x_input.setPlaceholderText("Camera offset X")
-        self.offset_x_input.setText("7.0")  # Default from config
+        self.offset_x_input.setText("0.8")  # Calibrated offset
         input_layout.addWidget(self.offset_x_input, 3, 1)
 
         # Camera offset Y input
         input_layout.addWidget(QLabel("Offset Y (mm):"), 4, 0)
         self.offset_y_input = QLineEdit()
         self.offset_y_input.setPlaceholderText("Camera offset Y")
-        self.offset_y_input.setText("92.9")  # Default from config
+        self.offset_y_input.setText("85.3")  # Calibrated offset
         input_layout.addWidget(self.offset_y_input, 4, 1)
 
         # Buttons
@@ -609,8 +609,8 @@ class CoordinateTester(QMainWindow):
             x_mm = float(self.x_input.text())
             y_mm = float(self.y_input.text())
             angle = float(self.angle_input.text()) if self.angle_input.text() else 0.0
-            offset_x = float(self.offset_x_input.text()) if self.offset_x_input.text() else 7.0
-            offset_y = float(self.offset_y_input.text()) if self.offset_y_input.text() else 92.9
+            offset_x = float(self.offset_x_input.text()) if self.offset_x_input.text() else 0.8
+            offset_y = float(self.offset_y_input.text()) if self.offset_y_input.text() else 85.3
 
             if self.inspect_data_mgr is None:
                 self.info_label.setText("✗ Error: Robot inspection control not connected")
