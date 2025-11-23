@@ -802,14 +802,15 @@ class XArmController:
                 offset_angle_in_workspace = camera_angle + camera_offset_angle_in_gripper
                 angle_rad = math.radians(offset_angle_in_workspace)
 
-                # Calculate gripper position by ADDING offset
+                # Calculate gripper position by SUBTRACTING offset
+                # To center camera on target: gripper_pos = target_pos - offset
                 offset_x_ws = offset_magnitude * math.cos(angle_rad)
                 offset_y_ws = offset_magnitude * math.sin(angle_rad)
-                gripper_det_x = target_det_x + offset_x_ws
-                gripper_det_y = target_det_y + offset_y_ws
+                gripper_det_x = target_det_x - offset_x_ws
+                gripper_det_y = target_det_y - offset_y_ws
 
                 print(f"[Inspect] Camera angle: {camera_angle:.1f}°")
-                print(f"[Inspect] Offset: (+{offset_x_ws:.1f}, +{offset_y_ws:.1f}) mm")
+                print(f"[Inspect] Offset: (-{offset_x_ws:.1f}, -{offset_y_ws:.1f}) mm")
                 print(f"[Inspect] Gripper position: ({gripper_det_x:.1f}, {gripper_det_y:.1f}) mm")
                 print(f"{'='*60}\n")
 
