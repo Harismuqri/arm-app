@@ -799,8 +799,7 @@ class XArmController:
                 camera_offset_angle_in_gripper = math.degrees(math.atan2(offset_y, offset_x))
 
                 # Offset direction in workspace when gripper is at camera_angle
-                # Add 180° to flip the offset direction
-                offset_angle_in_workspace = camera_angle + camera_offset_angle_in_gripper + 180
+                offset_angle_in_workspace = camera_angle + camera_offset_angle_in_gripper
                 angle_rad = math.radians(offset_angle_in_workspace)
 
                 # Calculate gripper position by SUBTRACTING offset
@@ -811,7 +810,6 @@ class XArmController:
                 gripper_det_y = target_det_y - offset_y_ws
 
                 print(f"[Inspect] Camera angle: {camera_angle:.1f}°")
-                print(f"[Inspect] Offset angle: {offset_angle_in_workspace:.1f}° (flipped 180°)")
                 print(f"[Inspect] Offset: (-{offset_x_ws:.1f}, -{offset_y_ws:.1f}) mm")
                 print(f"[Inspect] Gripper position: ({gripper_det_x:.1f}, {gripper_det_y:.1f}) mm")
                 print(f"{'='*60}\n")
