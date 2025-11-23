@@ -3,22 +3,25 @@ Coordinate Testing Tool
 Allows manual input of X,Y coordinates to visualize position and send gripper to location
 """
 
+# Standard library imports
 import sys
-import cv2
-import numpy as np
 import json
 import os
 import time
 import struct
 import pickle
 from multiprocessing import shared_memory
+
+# Third-party imports
+import cv2
+import numpy as np
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                               QHBoxLayout, QLabel, QLineEdit, QPushButton,
                               QGroupBox, QGridLayout, QSizePolicy)
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap, QFont, QColor
 
-# Try to import YOLO - if it fails, continue without automatic detection
+# YOLO import - MUST be before PySpin to avoid DLL loading issues
 try:
     from ultralytics import YOLO
     YOLO_AVAILABLE = True
@@ -28,6 +31,7 @@ except Exception as e:
     YOLO_AVAILABLE = False
     YOLO = None
 
+# PySpin import - MUST be after YOLO
 import PySpin
 
 
