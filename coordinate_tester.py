@@ -22,14 +22,29 @@ from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap, QFont, QColor
 
 # YOLO import - MUST be before PySpin to avoid DLL loading issues
-try:
-    from ultralytics import YOLO
-    YOLO_AVAILABLE = True
-except Exception as e:
-    print(f"[WARNING] YOLO not available: {e}")
-    print("[INFO] Coordinate tester will work with manual angle input only")
-    YOLO_AVAILABLE = False
-    YOLO = None
+# Only import if model file exists to prevent DLL conflicts
+YOLO_AVAILABLE = False
+YOLO = None
+
+# Check if YOLO model file exists before importing (prevents PyTorch DLL loading if not needed)
+if os.path.exists("config.json"):
+    with open("config.json", 'r') as f:
+        temp_config = json.load(f)
+        model_path = temp_config.get("yolo_model_path")
+        if model_path and os.path.exists(model_path):
+            try:
+                from ultralytics import YOLO
+                YOLO_AVAILABLE = True
+                print(f"[INFO] YOLO available - model found at: {model_path}")
+            except Exception as e:
+                print(f"[WARNING] YOLO import failed: {e}")
+                print("[INFO] Coordinate tester will work with manual angle input only")
+        else:
+            print(f"[INFO] YOLO model not found - automatic angle detection disabled")
+            print(f"[INFO] Expected path: {model_path}")
+            print("[INFO] Coordinate tester will work with manual angle input only")
+else:
+    print("[INFO] config.json not found - YOLO disabled")
 
 # PySpin import - MUST be after YOLO
 import PySpin
