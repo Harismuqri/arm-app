@@ -194,6 +194,60 @@ def point_in_polygon(point, polygon):
     """Check if a point is inside a polygon"""
     return cv2.pointPolygonTest(polygon, point, False) >= 0
 
+def get_error_offset_for_angle(angle):
+    """
+    Calculate error offset based on angle range.
+    Adjust the values in each range to calibrate for different angles.
+
+    Returns: (error_x, error_y) tuple
+    """
+    # Normalize angle to 0-180° range
+    angle_norm = angle % 180
+
+    # Apply error offset based on angle range
+    if 0 <= angle_norm < 30:
+        # Angle 0-29°: Base position, no error correction needed
+        error_x = 0.5
+        error_y = 3.0
+    elif 30 <= angle_norm < 40:
+        # Angle 30-39°: Adjust these values based on testing
+        error_x = 0.5
+        error_y = 1.5
+    elif 40 <= angle_norm < 50:
+        # Angle 40-49°: Adjust these values based on testing
+        error_x = -0.5
+        error_y = 0.5
+    elif 50 <= angle_norm < 60:
+        # Angle 50-59°: Adjust these values based on testing
+        error_x = -0.5
+        error_y = -0.5
+    elif 60 <= angle_norm < 70:
+        # Angle 60-89°: Adjust these values based on testing
+        error_x = -1.0
+        error_y = -1.3
+    elif 70 <= angle_norm < 80:
+        # Angle 70-79°: Adjust these values based on testing
+        error_x = 0.0
+        error_y = -2.0
+    elif 80 <= angle_norm < 90:
+        # Angle 80-89°: Adjust these values based on testing
+        error_x = -4.0
+        error_y = 4.2
+    elif 90 <= angle_norm < 120:
+        # Angle 90-119°: Adjust these values based on testing
+        error_x = -2.5
+        error_y = 5.0
+    elif 120 <= angle_norm < 160:
+        # Angle 120-159°: Adjust these values based on testing
+        error_x = -0.5
+        error_y = 5.0
+    else:  # 150-180°
+        # Angle 150-180°: Adjust these values based on testing
+        error_x = 0.5
+        error_y = 4.0
+
+    return error_x, error_y
+
 def draw_info_panel(frame, x, y, info_lines, title="Info"):
     """Draw an information panel at specified position"""
     font = cv2.FONT_HERSHEY_SIMPLEX
@@ -502,6 +556,9 @@ class InspectDataManager:
 
     def write_inspect_command(self, target_x, target_y, angle=0.0, width=0.0, height=0.0):
         """Send inspection command with target position and object angle."""
+        # Calculate angle-based error offset
+        error_x, error_y = get_error_offset_for_angle(angle)
+
         data = {
             "inspect": True,
             "target_x": float(target_x),
@@ -511,15 +568,15 @@ class InspectDataManager:
             "height": float(height),
             "offset_x": CAMERA_OFFSET_X,
             "offset_y": CAMERA_OFFSET_Y,
-            "offset_error_x": CAMERA_OFFSET_ERROR_X,
-            "offset_error_y": CAMERA_OFFSET_ERROR_Y,
+            "offset_error_x": error_x,
+            "offset_error_y": error_y,
             "timestamp": time.time(),
             "processed": False
         }
         self._write_data(data)
         print(f"[INSPECT] Inspection command sent: Target ({target_x:.1f}, {target_y:.1f}) mm - Angle: {angle:.1f}°")
         print(f"[INSPECT] Camera offset: ({CAMERA_OFFSET_X:.1f}, {CAMERA_OFFSET_Y:.1f}) mm")
-        print(f"[INSPECT] Camera offset error: (±{CAMERA_OFFSET_ERROR_X:.1f}, ±{CAMERA_OFFSET_ERROR_Y:.1f}) mm")
+        print(f"[INSPECT] Camera offset error: ({error_x:+.1f}, {error_y:+.1f}) mm @ {angle:.1f}°")
 
     def cleanup(self):
         """Close and unlink shared memory."""
@@ -1054,27 +1111,36 @@ def main():
             if frame_inspect is not None and cam_inspect:
                 h, w = frame_inspect.shape[:2]
                 center_x, center_y = w // 2, h // 2
-                
+
                 # Draw inspection crosshair
                 draw_inspection_crosshair(frame_inspect, center_x, center_y)
-                
+
+                # Calculate angle-based error offset if object is selected
+                if selected_object:
+                    error_x, error_y = get_error_offset_for_angle(selected_object['angle'])
+                    angle_info = f" @ {selected_object['angle']:.1f}°"
+                else:
+                    # Default error offset when no object is selected
+                    error_x, error_y = get_error_offset_for_angle(0)
+                    angle_info = ""
+
                 # Draw info overlay
                 overlay = frame_inspect.copy()
                 cv2.rectangle(overlay, (10, 10), (500, 140), (0, 0, 0), -1)
                 cv2.addWeighted(overlay, 0.6, frame_inspect, 0.4, 0, frame_inspect)
-                
+
                 font = cv2.FONT_HERSHEY_SIMPLEX
                 info_lines = [
                     "INSPECTION CAMERA",
                     f"Offset: ({CAMERA_OFFSET_X:.1f}, {CAMERA_OFFSET_Y:.1f}) mm",
-                    f"Error: (±{CAMERA_OFFSET_ERROR_X:.1f}, ±{CAMERA_OFFSET_ERROR_Y:.1f}) mm"
+                    f"Error: ({error_x:+.1f}, {error_y:+.1f}) mm{angle_info}"
                 ]
 
                 y_offset = 50
                 for line in info_lines:
                     cv2.putText(frame_inspect, line, (25, y_offset), font, 1.0, (0, 255, 255), 2, cv2.LINE_AA)
                     y_offset += 40
-                
+
                 cv2.imshow(window_inspect, frame_inspect)
 
             # Handle keyboard input
