@@ -426,7 +426,7 @@ class XArmController:
             camera_rotation = 0
         else:  # 80-180°
             # Angle 80-180°: Add 0° rotation
-            camera_rotation = 0
+            camera_rotation = 180
 
         return object_angle + camera_rotation
 

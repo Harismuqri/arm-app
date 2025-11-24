@@ -1,86 +1,40 @@
 """
-Coordinate Testing Tool
-Allows manual input of X,Y coordinates to visualize position and send gripper to location
+xArm Robot Controller - Click-based Movement with Inspection Camera Support
+Left Click = Move, Right Click = Pick/Place Toggle, T Key = Inspection
 """
 
-# Standard library imports
-import sys
-import json
-import os
-import time
-import struct
-import pickle
 from multiprocessing import shared_memory
-
-# Third-party imports
+import struct
+import json
+import time
+import os
+import pickle
+import math
 import cv2
 import numpy as np
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
-                              QHBoxLayout, QLabel, QLineEdit, QPushButton,
-                              QGroupBox, QGridLayout, QSizePolicy)
-from PyQt6.QtCore import QTimer, Qt, pyqtSignal
-from PyQt6.QtGui import QImage, QPixmap, QFont, QColor
+from xarm.wrapper import XArmAPI
 
-# YOLO import - MUST be before PySpin to avoid DLL loading issues
-from ultralytics import YOLO
+# Shared memory configuration
+CLICK_MEMORY_NAME = "ClickData"
+CLICK_MEMORY_SIZE = 512
+INSPECT_MEMORY_NAME = "InspectData"
+INSPECT_MEMORY_SIZE = 512
 
-# PySpin import - MUST be after YOLO
-import PySpin
+# Camera offset configuration (mm)
+CAMERA_OFFSET_X = 7
+CAMERA_OFFSET_Y = 92.9
+CAMERA_OFFSET_ERROR = 0.0
 
-
-class ClickableLabel(QLabel):
-    """Custom QLabel that emits click signals with scaled coordinates"""
-    clicked = pyqtSignal(int, int)
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.original_image_size = None  # Store original image size for coordinate scaling
-        self.displayed_image_size = None  # Store displayed (scaled) image size
-
-    def mousePressEvent(self, event):
-        """Handle mouse press events and emit scaled coordinates"""
-        if event.button() == Qt.MouseButton.LeftButton:
-            # Get click position in widget coordinates
-            click_pos = event.pos()
-            widget_x = click_pos.x()
-            widget_y = click_pos.y()
-
-            # Scale coordinates to match original image size
-            if self.original_image_size and self.displayed_image_size:
-                # Calculate image offset (image is centered in label)
-                label_w = self.width()
-                label_h = self.height()
-                img_w = self.displayed_image_size[0]
-                img_h = self.displayed_image_size[1]
-
-                offset_x = (label_w - img_w) / 2
-                offset_y = (label_h - img_h) / 2
-
-                # Adjust click position by offset
-                img_click_x = widget_x - offset_x
-                img_click_y = widget_y - offset_y
-
-                # Check if click is within image bounds
-                if 0 <= img_click_x < img_w and 0 <= img_click_y < img_h:
-                    # Calculate scaling factors
-                    scale_x = self.original_image_size[0] / self.displayed_image_size[0]
-                    scale_y = self.original_image_size[1] / self.displayed_image_size[1]
-
-                    # Scale click coordinates to original image size
-                    orig_x = int(img_click_x * scale_x)
-                    orig_y = int(img_click_y * scale_y)
-
-                    # Emit signal with scaled coordinates
-                    self.clicked.emit(orig_x, orig_y)
-            else:
-                # No scaling info, emit raw coordinates
-                self.clicked.emit(widget_x, widget_y)
-
+# Robot workspace boundaries (mm) - actual robot coordinates
+ROBOT_MIN_X = 88.9
+ROBOT_MAX_X = 382.0
+ROBOT_MIN_Y = 14.7
+ROBOT_MAX_Y = 312.0
 
 class ClickDataManager:
-    """Manages shared memory for sending move coordinates to robot"""
+    """Manages shared memory for mouse click data."""
 
-    def __init__(self, name="ClickData", size=512):
+    def __init__(self, name=CLICK_MEMORY_NAME, size=CLICK_MEMORY_SIZE):
         self.name = name
         self.size = size
         self.shm = None
@@ -89,15 +43,16 @@ class ClickDataManager:
     def _initialize_shared_memory(self):
         """Create or attach to existing shared memory."""
         try:
+            self.shm = shared_memory.SharedMemory(name=self.name, create=True, size=self.size)
+            print(f"[INFO] Created click data shared memory: {self.name}")
+            initial_data = {"click_x": 0, "click_y": 0, "timestamp": 0, "processed": True, "button": "none", "angle": 0.0, "width": 0.0, "height": 0.0}
+            self._write_data(initial_data)
+            print(f"[DEBUG] Initialized with data: {initial_data}")
+        except FileExistsError:
             self.shm = shared_memory.SharedMemory(name=self.name, create=False)
-            self._read_data()
-        except FileNotFoundError:
-            try:
-                self.shm = shared_memory.SharedMemory(name=self.name, create=True, size=self.size)
-                self._write_data({"click_x": 0, "click_y": 0, "timestamp": 0, "processed": True, "button": "none", "angle": 0.0})
-            except Exception as e:
-                print(f"[ERROR] Failed to create shared memory: {e}")
-                raise
+            print(f"[INFO] Attached to existing click data shared memory: {self.name}")
+            existing_data = self._read_data()
+            print(f"[DEBUG] Found existing data: {existing_data}")
 
     def _write_data(self, data):
         """Write data to shared memory as JSON."""
@@ -106,7 +61,6 @@ class ClickDataManager:
             json_bytes = json_str.encode('utf-8')
 
             if len(json_bytes) > self.size - 4:
-                print(f"[ERROR] Data too large: {len(json_bytes)} > {self.size-4}")
                 return False
 
             self.shm.buf[:4] = struct.pack('I', len(json_bytes))
@@ -121,40 +75,52 @@ class ClickDataManager:
         try:
             length = struct.unpack('I', bytes(self.shm.buf[:4]))[0]
             if length == 0 or length > self.size - 4:
-                return {"click_x": 0, "click_y": 0, "timestamp": 0, "processed": True, "button": "none", "angle": 0.0}
+                return {"click_x": 0, "click_y": 0, "timestamp": 0, "processed": True, "button": "none", "angle": 0.0, "width": 0.0, "height": 0.0}
 
             json_bytes = bytes(self.shm.buf[4:4+length])
             json_str = json_bytes.decode('utf-8')
-            return json.loads(json_str)
-        except Exception as e:
-            print(f"[ERROR] Failed to read click data: {e}")
-            return None
+            data = json.loads(json_str)
 
-    def send_coordinate(self, x_mm, y_mm, angle=0.0):
-        """Send coordinate to robot via shared memory"""
-        data = {
-            "click_x": float(x_mm),
-            "click_y": float(y_mm),
-            "timestamp": time.time(),
-            "processed": False,
-            "button": "left",
-            "angle": float(angle)
-        }
-        return self._write_data(data)
+            # Ensure button, angle, width, and height keys exist
+            if "button" not in data:
+                data["button"] = "left"
+            if "angle" not in data:
+                data["angle"] = 0.0
+            if "width" not in data:
+                data["width"] = 0.0
+            if "height" not in data:
+                data["height"] = 0.0
+
+            return data
+        except Exception as e:
+            print(f"[ERROR] Failed to read: {e}")
+            return {"click_x": 0, "click_y": 0, "timestamp": 0, "processed": True, "button": "none", "angle": 0.0, "width": 0.0, "height": 0.0}
+
+    def read_click(self):
+        """Read click data."""
+        return self._read_data()
+
+    def mark_processed(self):
+        """Mark the current click as processed."""
+        data = self._read_data()
+        data["processed"] = True
+        self._write_data(data)
 
     def cleanup(self):
-        """Clean up shared memory."""
+        """Close and unlink shared memory."""
         if self.shm:
             try:
                 self.shm.close()
-            except:
-                pass
+                self.shm.unlink()
+                print(f"[INFO] Click data shared memory cleaned up: {self.name}")
+            except Exception as e:
+                print(f"[ERROR] Failed to cleanup: {e}")
 
 
 class InspectDataManager:
-    """Manages shared memory for sending inspection commands to robot"""
+    """Manages shared memory for inspection commands."""
 
-    def __init__(self, name="InspectData", size=512):
+    def __init__(self, name=INSPECT_MEMORY_NAME, size=INSPECT_MEMORY_SIZE):
         self.name = name
         self.size = size
         self.shm = None
@@ -163,40 +129,13 @@ class InspectDataManager:
     def _initialize_shared_memory(self):
         """Create or attach to existing shared memory."""
         try:
+            self.shm = shared_memory.SharedMemory(name=self.name, create=True, size=self.size)
+            print(f"[INFO] Created inspect data shared memory: {self.name}")
+            initial_data = {"inspect": False, "target_x": 0, "target_y": 0, "angle": 0.0, "offset_x": CAMERA_OFFSET_X, "offset_y": CAMERA_OFFSET_Y, "timestamp": 0, "processed": True}
+            self._write_data(initial_data)
+        except FileExistsError:
             self.shm = shared_memory.SharedMemory(name=self.name, create=False)
-        except FileNotFoundError:
-            try:
-                self.shm = shared_memory.SharedMemory(name=self.name, create=True, size=self.size)
-                # Get camera offset from config
-                camera_offset = self.get_camera_offset_from_config()
-                self._write_data({
-                    "inspect": False,
-                    "target_x": 0,
-                    "target_y": 0,
-                    "angle": 0.0,
-                    "width": 0.0,
-                    "height": 0.0,
-                    "offset_x": camera_offset.get("offset_x", 0.8),
-                    "offset_y": camera_offset.get("offset_y", 85.3),
-                    "offset_error_x": camera_offset.get("offset_error_x", 0.0),
-                    "offset_error_y": camera_offset.get("offset_error_y", 0.0),
-                    "timestamp": 0,
-                    "processed": True
-                })
-            except Exception as e:
-                print(f"[ERROR] Failed to create inspect shared memory: {e}")
-                raise
-
-    def get_camera_offset_from_config(self):
-        """Get camera offset from config.json"""
-        try:
-            if os.path.exists("config.json"):
-                with open("config.json", "r") as f:
-                    config = json.load(f)
-                    return config.get("camera_offset", {"offset_x": 0.8, "offset_y": 85.3, "offset_error_x": 0.0, "offset_error_y": 0.0})
-        except:
-            pass
-        return {"offset_x": 0.8, "offset_y": 85.3, "offset_error_x": 0.0, "offset_error_y": 0.0}
+            print(f"[INFO] Attached to existing inspect data shared memory: {self.name}")
 
     def _write_data(self, data):
         """Write data to shared memory as JSON."""
@@ -214,117 +153,118 @@ class InspectDataManager:
             print(f"[ERROR] Failed to write inspect data: {e}")
             return False
 
-    def send_inspect_command(self, target_x, target_y, angle=0.0, width=0.0, height=0.0, offset_x=None, offset_y=None, offset_error_x=None, offset_error_y=None):
-        """Send inspection command with target position and object angle."""
-        camera_offset = self.get_camera_offset_from_config()
-        # Use provided offsets or fall back to config
-        if offset_x is None:
-            offset_x = camera_offset.get("offset_x", 0.8)
-        if offset_y is None:
-            offset_y = camera_offset.get("offset_y", 85.3)
-        if offset_error_x is None:
-            offset_error_x = camera_offset.get("offset_error_x", 0.0)
-        if offset_error_y is None:
-            offset_error_y = camera_offset.get("offset_error_y", 0.0)
+    def _read_data(self):
+        """Read data from shared memory."""
+        try:
+            length = struct.unpack('I', bytes(self.shm.buf[:4]))[0]
+            if length == 0 or length > self.size - 4:
+                return {"inspect": False, "target_x": 0, "target_y": 0, "angle": 0.0, "offset_x": CAMERA_OFFSET_X, "offset_y": CAMERA_OFFSET_Y, "timestamp": 0, "processed": True}
 
+            json_bytes = bytes(self.shm.buf[4:4+length])
+            json_str = json_bytes.decode('utf-8')
+            data = json.loads(json_str)
+
+            # Ensure angle and offset keys exist for backward compatibility
+            if "angle" not in data:
+                data["angle"] = 0.0
+            if "offset_x" not in data:
+                data["offset_x"] = CAMERA_OFFSET_X
+            if "offset_y" not in data:
+                data["offset_y"] = CAMERA_OFFSET_Y
+
+            return data
+        except Exception as e:
+            print(f"[ERROR] Failed to read inspect data: {e}")
+            return {"inspect": False, "target_x": 0, "target_y": 0, "angle": 0.0, "offset_x": CAMERA_OFFSET_X, "offset_y": CAMERA_OFFSET_Y, "timestamp": 0, "processed": True}
+
+    def read_inspect(self):
+        """Read inspection command."""
+        return self._read_data()
+
+    def mark_processed(self):
+        """Mark the current inspection command as processed."""
+        data = self._read_data()
+        data["processed"] = True
+        self._write_data(data)
+
+    def write_inspect_command(self, target_x, target_y, angle=0.0, width=0.0, height=0.0):
+        """Send inspection command with target position and object angle."""
         data = {
             "inspect": True,
-            "home": False,
             "target_x": float(target_x),
             "target_y": float(target_y),
             "angle": float(angle),
             "width": float(width),
             "height": float(height),
-            "offset_x": float(offset_x),
-            "offset_y": float(offset_y),
-            "offset_error_x": float(offset_error_x),
-            "offset_error_y": float(offset_error_y),
+            "offset_x": CAMERA_OFFSET_X,
+            "offset_y": CAMERA_OFFSET_Y,
+            "offset_error": CAMERA_OFFSET_ERROR,
             "timestamp": time.time(),
             "processed": False
         }
-        return self._write_data(data)
-
-    def send_home_command(self):
-        """Send command to move robot to home position."""
-        camera_offset = self.get_camera_offset_from_config()
-        data = {
-            "inspect": False,
-            "home": True,
-            "target_x": 0,
-            "target_y": 0,
-            "angle": 0.0,
-            "width": 0.0,
-            "height": 0.0,
-            "offset_x": camera_offset.get("offset_x", 0.8),
-            "offset_y": camera_offset.get("offset_y", 85.3),
-            "offset_error_x": camera_offset.get("offset_error_x", 0.0),
-            "offset_error_y": camera_offset.get("offset_error_y", 0.0),
-            "timestamp": time.time(),
-            "processed": False
-        }
-        return self._write_data(data)
+        self._write_data(data)
+        print(f"[INSPECT] Inspection command sent: Target ({target_x:.1f}, {target_y:.1f}) mm - Angle: {angle:.1f}°")
+        print(f"[INSPECT] Camera offset: ({CAMERA_OFFSET_X:.1f}, {CAMERA_OFFSET_Y:.1f}) ± {CAMERA_OFFSET_ERROR:.1f} mm")
 
     def cleanup(self):
         """Close and unlink shared memory."""
         if self.shm:
             try:
                 self.shm.close()
-            except:
-                pass
+                self.shm.unlink()
+                print(f"[INFO] Inspect data shared memory cleaned up: {self.name}")
+            except Exception as e:
+                print(f"[ERROR] Failed to cleanup: {e}")
 
 
-class CoordinateTester(QMainWindow):
-    """Simple tool to test coordinates by showing dots on camera"""
+class XArmController:
+    """xArm robot controller for click-based movement with automatic gripper angle adjustment and inspection support."""
 
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Coordinate Testing Tool with Robot Control")
-        self.setGeometry(100, 100, 1400, 800)
+    def __init__(self, config_path="config.json"):
+        self.config = self.load_config(config_path)
+        self.robot_ip = self.config.get("robot_ip", "192.168.1.151")
+        self._arm = None
+        self.is_moving = False
 
-        # Load configuration
-        self.config = self.load_config()
+        # Load heights from config
+        click_config = self.config.get("click_control", {})
+        self.safe_height = click_config.get("safe_height", 150)
+        self.pick_height = click_config.get("pick_height", -5)
+        self.inspection_height = click_config.get("inspection_height", 103.4)
 
-        # Cameras
-        self.system = None
-        self.detection_camera = None
-        self.inspection_camera = None
+        # Inspection height (Z offset of camera from workspace)
+        self.inspect_height = self.inspection_height  # mm - actual camera Z position
 
-        # Calibration matrix
-        self.H_camera_to_workspace = None
-        self.H_workspace_to_camera = None  # Inverse matrix
+        # Load homography matrix for coordinate transformation
+        self.H_det_to_robot = None
+        self.load_homography()
 
-        # Test points to display
-        self.test_points = []  # List of (x_mm, y_mm) tuples
+        # Home position
+        self.home_position = [1.5, 6.3, 45.5, 0, 39.2, 3.2]
 
-        # Click info panel tracking
-        self.mouse_click_x = 0
-        self.mouse_click_y = 0
-        self.show_info_panel = False
-        self.clicked_workspace_pos = None  # Store clicked position in workspace coordinates (x_mm, y_mm)
+        # Load calibration position from config
+        calib_config = self.config.get("calibration_position", {})
+        self.calibration_position = {
+            "x": calib_config.get("x", -95.3),
+            "y": calib_config.get("y", 211.6),
+            "z": calib_config.get("z", 172.1),
+            "roll": calib_config.get("roll", -179.6),
+            "pitch": calib_config.get("pitch", -1.2),
+            "yaw": calib_config.get("yaw", -1.6)
+        }
 
-        # YOLO detection
-        self.model = None
-        self.detected_objects = []  # List of detected objects with their properties
-        self.load_yolo_model()
+        self.connect_robot()
+        self.initialize_robot()
 
-        # Robot control - using InspectData for inspection commands
-        self.inspect_data_mgr = None
-        try:
-            self.inspect_data_mgr = InspectDataManager(name="InspectData", size=512)
-            print("[INFO] Connected to robot inspection control shared memory")
-        except Exception as e:
-            print(f"[WARNING] Could not connect to robot inspection control: {e}")
-
-        self.init_ui()
-        self.load_calibration()
-
-        # Start camera timer - cameras will be initialized on first update
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_cameras)
-        self.timer.start(33)  # ~30 FPS
+        # NEW STARTUP SEQUENCE: Move to calibration position and wait for YOLO
+        print("[Robot] Moving to calibration position for camera calibration...")
+        self.go_to_calibration_position()
+        self.wait_for_yolo_calibration()
+        print("[Robot] Moving to home position...")
+        self.go_home()
 
     def load_config(self, path="config.json"):
-        """Load configuration from JSON file"""
+        """Load configuration from JSON file."""
         try:
             if not os.path.isabs(path):
                 base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -332,801 +272,1074 @@ class CoordinateTester(QMainWindow):
 
             with open(path, "r") as f:
                 config = json.load(f)
+                print(f"[Config] Loaded from {path}")
                 return config
         except Exception as e:
-            print(f"[ERROR] Config load failed: {e}")
-            return {}
+            print(f"[Config] Failed to load config: {e}")
+            print("[Config] Using default values")
+            return {
+                "robot_ip": "192.168.1.151",
+                "tcp_speed": 300,
+                "tcp_acc": 1000,
+                "angle_speed": 20,
+                "angle_acc": 500,
+                "click_control": {
+                    "safe_height": 150,
+                    "pick_height": -5,
+                    "workspace_min_x": 0,
+                    "workspace_max_x": 300,
+                    "workspace_min_y": 0,
+                    "workspace_max_y": 300
+                }
+            }
 
-    def load_yolo_model(self):
-        """Load YOLO model from config"""
-        model_path = self.config.get("yolo_model_path", "best.pt")
-        self.model = YOLO(model_path)
-        self.model.overrides['verbose'] = False
+    def wait_for_yolo_calibration(self):
+        """Wait for YOLO calibration to complete by monitoring file modification time."""
+        print("\n" + "="*60)
+        print("[Calibration] Waiting for YOLO camera calibration...")
+        print("[Calibration] Please run yolo-mouse-v2.py now")
+        print("[Calibration] Robot will remain at calibration position")
+        print("="*60)
 
-    def get_angle(self, obb_pts):
-        """Calculate angle from OBB points (same as arm-app-v1.1.py)"""
-        v1 = obb_pts[1] - obb_pts[0]
-        v2 = obb_pts[2] - obb_pts[1]
-        len1 = np.linalg.norm(v1)
-        len2 = np.linalg.norm(v2)
-        long_vec = v1 if len1 >= len2 else v2
-        angle_rad = np.arctan2(long_vec[1], long_vec[0])
-        angle_deg = np.degrees(angle_rad)
-        if angle_deg < 0:
-            angle_deg += 180
-        return angle_deg
-
-    def point_in_polygon(self, point, polygon):
-        """Check if point is inside polygon using cv2.pointPolygonTest"""
-        return cv2.pointPolygonTest(polygon.astype(np.float32), point, False) >= 0
-
-    def transform_points(self, points, matrix):
-        """Transform points using homography matrix"""
-        if len(points.shape) == 1:
-            points = points.reshape(-1, 2)
-        pts = points.reshape(-1, 1, 2).astype(np.float32)
-        transformed = cv2.perspectiveTransform(pts, matrix)
-        return transformed.reshape(-1, 2)
-
-    def is_inside_workspace(self, pts):
-        """Check if points are inside workspace boundaries"""
-        workspace_width = self.config.get("workspace", {}).get("width", 300)
-        workspace_height = self.config.get("workspace", {}).get("height", 300)
-        x, y = pts[:, 0], pts[:, 1]
-        return np.all((x >= 0) & (x <= workspace_width) & (y >= 0) & (y <= workspace_height))
-
-    def load_calibration(self):
-        """Load calibration matrix from homography_auto.pkl"""
-        # Get script directory to find calibration file
+        # Look for files in script directory
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        calib_file = os.path.join(script_dir, "homography_auto.pkl")
+        homography_file = os.path.join(script_dir, "homography_auto.pkl")
+        det_to_robot_file = os.path.join(script_dir, "homography_det_to_robot.pkl")
 
-        if os.path.exists(calib_file):
-            try:
-                with open(calib_file, 'rb') as f:
-                    self.H_camera_to_workspace = pickle.load(f)
-                    # Calculate inverse matrix for camera display
-                    self.H_workspace_to_camera = np.linalg.inv(self.H_camera_to_workspace)
-                self.status_label.setText("Status: Calibration loaded ✓")
-                print(f"[INFO] Loaded calibration: {calib_file}")
-            except Exception as e:
-                self.status_label.setText(f"Status: Error loading calibration - {str(e)[:30]}...")
-                print(f"[ERROR] Failed to load calibration: {e}")
+        # Get initial modification time if files exist
+        initial_mtime = None
+        if os.path.exists(homography_file):
+            initial_mtime = os.path.getmtime(homography_file)
+            print(f"[Calibration] Found existing calibration file")
+            print(f"[Calibration] Waiting for YOLO to overwrite with new calibration...")
         else:
-            self.status_label.setText(f"Status: No calibration found")
-            print(f"[WARNING] Calibration file not found: {calib_file}")
+            print(f"[Calibration] No existing calibration - waiting for YOLO to create files...")
 
-    def init_ui(self):
-        """Initialize user interface"""
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        layout = QVBoxLayout(central_widget)
+        wait_count = 0
+        calibration_complete = False
 
-        # Title
-        title = QLabel("Coordinate Testing Tool")
-        title.setFont(QFont("Arial", 16, QFont.Weight.Bold))
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title)
+        while not calibration_complete:
+            time.sleep(1)
+            wait_count += 1
 
-        # Input group
-        input_group = QGroupBox("Coordinate Input (Workspace mm)")
-        input_main_layout = QHBoxLayout()  # Horizontal layout for inputs and buttons
+            # Check if file exists and has been modified
+            if os.path.exists(homography_file):
+                current_mtime = os.path.getmtime(homography_file)
 
-        # Left side: Input fields
-        input_layout = QGridLayout()
-
-        # X coordinate
-        input_layout.addWidget(QLabel("X (mm):"), 0, 0)
-        self.x_input = QLineEdit()
-        self.x_input.setPlaceholderText("Enter X coordinate")
-        input_layout.addWidget(self.x_input, 0, 1)
-
-        # Y coordinate
-        input_layout.addWidget(QLabel("Y (mm):"), 1, 0)
-        self.y_input = QLineEdit()
-        self.y_input.setPlaceholderText("Enter Y coordinate")
-        input_layout.addWidget(self.y_input, 1, 1)
-
-        # Angle input
-        input_layout.addWidget(QLabel("Angle (°):"), 2, 0)
-        self.angle_input = QLineEdit()
-        self.angle_input.setPlaceholderText("Enter angle (0-180)")
-        self.angle_input.setText("0")  # Default to 0 degrees
-        self.angle_input.textChanged.connect(self.on_angle_changed)  # Update display when angle changes
-        input_layout.addWidget(self.angle_input, 2, 1)
-
-        # Camera offset X input
-        input_layout.addWidget(QLabel("Offset X (mm):"), 3, 0)
-        self.offset_x_input = QLineEdit()
-        self.offset_x_input.setPlaceholderText("Camera offset X")
-        self.offset_x_input.setText("0.8")  # Calibrated offset
-        input_layout.addWidget(self.offset_x_input, 3, 1)
-
-        # Camera offset Y input
-        input_layout.addWidget(QLabel("Offset Y (mm):"), 4, 0)
-        self.offset_y_input = QLineEdit()
-        self.offset_y_input.setPlaceholderText("Camera offset Y")
-        self.offset_y_input.setText("85.3")  # Calibrated offset
-        input_layout.addWidget(self.offset_y_input, 4, 1)
-
-        # Camera offset error X input
-        input_layout.addWidget(QLabel("Offset Error X (mm):"), 5, 0)
-        self.offset_error_x_input = QLineEdit()
-        self.offset_error_x_input.setPlaceholderText("Error X")
-        self.offset_error_x_input.setText("0")  # Default offset error X
-        input_layout.addWidget(self.offset_error_x_input, 5, 1)
-
-        # Camera offset error Y input
-        input_layout.addWidget(QLabel("Offset Error Y (mm):"), 6, 0)
-        self.offset_error_y_input = QLineEdit()
-        self.offset_error_y_input.setPlaceholderText("Error Y")
-        self.offset_error_y_input.setText("0")  # Default offset error Y
-        input_layout.addWidget(self.offset_error_y_input, 6, 1)
-
-        input_main_layout.addLayout(input_layout)
-
-        # Right side: Buttons (vertical stack)
-        btn_layout = QVBoxLayout()
-
-        self.add_btn = QPushButton("Add Point")
-        self.add_btn.clicked.connect(self.add_point)
-        self.add_btn.setMinimumSize(140, 45)
-        self.add_btn.setFont(QFont("Arial", 11))
-        btn_layout.addWidget(self.add_btn)
-
-        self.send_robot_btn = QPushButton("Inspect Target")
-        self.send_robot_btn.clicked.connect(self.send_to_robot)
-        self.send_robot_btn.setStyleSheet("background-color: #FF9800; color: white; font-weight: bold; font-size: 11pt;")
-        self.send_robot_btn.setMinimumSize(140, 45)
-        btn_layout.addWidget(self.send_robot_btn)
-
-        self.home_btn = QPushButton("Home")
-        self.home_btn.clicked.connect(self.send_home)
-        self.home_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold; font-size: 11pt;")
-        self.home_btn.setMinimumSize(140, 45)
-        btn_layout.addWidget(self.home_btn)
-
-        self.clear_btn = QPushButton("Clear All")
-        self.clear_btn.clicked.connect(self.clear_points)
-        self.clear_btn.setMinimumSize(140, 45)
-        self.clear_btn.setFont(QFont("Arial", 11))
-        btn_layout.addWidget(self.clear_btn)
-
-        btn_layout.addStretch()  # Push buttons to top
-
-        input_main_layout.addLayout(btn_layout)
-
-        input_group.setLayout(input_main_layout)
-        layout.addWidget(input_group)
-
-        # Status label
-        self.status_label = QLabel("Status: Initializing...")
-        self.status_label.setFont(QFont("Arial", 10))
-        layout.addWidget(self.status_label)
-
-        # Camera views - side by side
-        cameras_layout = QHBoxLayout()
-
-        # Detection camera view
-        det_group = QGroupBox("Detection Camera (Workspace View)")
-        det_layout = QVBoxLayout()
-        self.detection_label = ClickableLabel()  # Use ClickableLabel for click detection
-        self.detection_label.setMinimumSize(400, 300)  # Smaller minimum for flexibility
-        self.detection_label.setSizePolicy(
-            QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        )
-        self.detection_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.detection_label.setStyleSheet("border: 2px solid #555; background-color: #2a2a2a;")
-        self.detection_label.clicked.connect(self.on_detection_click)  # Connect click signal
-        self.detection_label.setScaledContents(False)  # Keep aspect ratio
-        det_layout.addWidget(self.detection_label)
-        det_group.setLayout(det_layout)
-        cameras_layout.addWidget(det_group, 1)  # Stretch factor 1
-
-        # Inspection camera view
-        insp_group = QGroupBox("Inspection Camera (Gripper View)")
-        insp_layout = QVBoxLayout()
-        self.inspection_label = QLabel()
-        self.inspection_label.setMinimumSize(400, 300)  # Smaller minimum for flexibility
-        self.inspection_label.setSizePolicy(
-            QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        )
-        self.inspection_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.inspection_label.setStyleSheet("border: 2px solid #555; background-color: #2a2a2a;")
-        self.inspection_label.setScaledContents(False)  # Keep aspect ratio
-        insp_layout.addWidget(self.inspection_label)
-        insp_group.setLayout(insp_layout)
-        cameras_layout.addWidget(insp_group, 1)  # Stretch factor 1
-
-        layout.addLayout(cameras_layout, 1)  # Add stretch factor to make cameras expand
-
-        # Info label
-        self.info_label = QLabel("Enter coordinates and angle (0-180°) then click 'Inspect Target' to position inspection camera")
-        self.info_label.setFont(QFont("Arial", 9))
-        self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.info_label)
-
-    def init_cameras(self):
-        """Initialize both detection and inspection cameras"""
-        try:
-            self.system = PySpin.System.GetInstance()
-            cam_list = self.system.GetCameras()
-
-            if cam_list.GetSize() >= 1:
-                # Get first camera (detection camera)
-                self.detection_camera = cam_list.GetByIndex(0)
-                self.detection_camera.Init()
-                self.detection_camera.AcquisitionMode.SetValue(PySpin.AcquisitionMode_Continuous)
-                self.detection_camera.BeginAcquisition()
-                print("[INFO] Detection camera initialized")
-
-            if cam_list.GetSize() >= 2:
-                # Get second camera (inspection camera)
-                self.inspection_camera = cam_list.GetByIndex(1)
-                self.inspection_camera.Init()
-                self.inspection_camera.AcquisitionMode.SetValue(PySpin.AcquisitionMode_Continuous)
-                self.inspection_camera.BeginAcquisition()
-                print("[INFO] Inspection camera initialized")
-                self.status_label.setText("Status: Both cameras connected ✓")
-            elif cam_list.GetSize() == 1:
-                self.status_label.setText("Status: Detection camera connected (inspection camera not found)")
-            else:
-                self.status_label.setText("Status: No cameras detected")
-                print("[WARNING] No cameras found")
-                self.show_no_camera_message()
-        except Exception as e:
-            error_msg = str(e)
-            self.status_label.setText(f"Status: Camera error - {error_msg[:50]}...")
-            print(f"[ERROR] Camera initialization failed: {error_msg}")
-
-            # Check if camera is in use
-            if "in use" in error_msg.lower() or "already" in error_msg.lower():
-                self.info_label.setText("⚠ Camera is in use by another application. Close other apps and restart.")
-
-            self.show_no_camera_message()
-
-    def show_no_camera_message(self):
-        """Show message when camera is not available"""
-        # Create a placeholder image
-        placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
-        cv2.putText(placeholder, "No Camera Feed Available", (120, 220),
-                   cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-        cv2.putText(placeholder, "Make sure:", (200, 280),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 1)
-        cv2.putText(placeholder, "1. Camera is connected", (180, 310),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
-        cv2.putText(placeholder, "2. No other app is using camera", (180, 340),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
-        cv2.putText(placeholder, "3. Restart this tool", (180, 370),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
-
-        # Display placeholder on both labels
-        h, w, ch = placeholder.shape
-        bytes_per_line = ch * w
-        qt_image = QImage(placeholder.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
-        pixmap = QPixmap.fromImage(qt_image.rgbSwapped())
-        self.detection_label.setPixmap(pixmap)
-        self.inspection_label.setPixmap(pixmap)
-
-    def add_point(self):
-        """Add a test point from input fields"""
-        try:
-            x_mm = float(self.x_input.text())
-            y_mm = float(self.y_input.text())
-
-            # Validate coordinates
-            workspace_width = self.config.get("workspace", {}).get("width", 300)
-            workspace_height = self.config.get("workspace", {}).get("height", 300)
-
-            if not (0 <= x_mm <= workspace_width and 0 <= y_mm <= workspace_height):
-                self.info_label.setText(f"⚠ Warning: Point ({x_mm}, {y_mm}) is outside workspace bounds")
-
-            # Add to list
-            self.test_points.append((x_mm, y_mm))
-            self.info_label.setText(f"✓ Added point: ({x_mm:.1f}, {y_mm:.1f}) mm - Total points: {len(self.test_points)}")
-
-            # Clear inputs
-            self.x_input.clear()
-            self.y_input.clear()
-            self.x_input.setFocus()
-
-        except ValueError:
-            self.info_label.setText("✗ Error: Please enter valid numbers for X and Y")
-
-    def clear_points(self):
-        """Clear all test points"""
-        self.test_points.clear()
-        self.info_label.setText("All points cleared")
-
-    def get_error_offset_for_angle(self, angle):
-        """
-        Calculate error offset based on angle range.
-        Adjust the values in each range to calibrate for different angles.
-
-        Returns: (error_x, error_y) tuple
-        """
-        # Normalize angle to 0-180° range
-        angle_norm = angle % 180
-
-        # Apply error offset based on angle range
-        # TODO: Adjust these values when you find perfect error offset values
-        if 0 <= angle_norm < 50:
-            # Angle 0-49°: Base position, no error correction needed
-            error_x = 0.0
-            error_y = 0.0
-        elif 50 <= angle_norm < 80:
-            # Angle 50-79°: Adjust these values based on testing
-            error_x = 0.0
-            error_y = 0.0
-        elif 80 <= angle_norm < 90:
-            # Angle 80-89°: Adjust these values based on testing
-            error_x = -2.0
-            error_y = -0.5
-        elif 90 <= angle_norm < 135:
-            # Angle 90-134°: Adjust these values based on testing
-            error_x = -2.0
-            error_y = -0.5
-        elif 135 <= angle_norm < 150:
-            # Angle 135-149°: Adjust these values based on testing
-            error_x = 0.0
-            error_y = 0.0
-        else:  # 150-180°
-            # Angle 150-180°: Adjust these values based on testing
-            error_x = 0.0
-            error_y = 0.0
-
-        return error_x, error_y
-
-    def send_to_robot(self):
-        """Send inspection command to robot via shared memory"""
-        try:
-            x_mm = float(self.x_input.text())
-            y_mm = float(self.y_input.text())
-            angle = float(self.angle_input.text()) if self.angle_input.text() else 0.0
-            offset_x = float(self.offset_x_input.text()) if self.offset_x_input.text() else 0.8
-            offset_y = float(self.offset_y_input.text()) if self.offset_y_input.text() else 85.3
-
-            # Get angle-based error offset (automatically calculated)
-            auto_error_x, auto_error_y = self.get_error_offset_for_angle(angle)
-
-            # You can still override with manual input if needed
-            # If the input fields have non-zero values, they will override the automatic values
-            manual_error_x = float(self.offset_error_x_input.text()) if self.offset_error_x_input.text() else auto_error_x
-            manual_error_y = float(self.offset_error_y_input.text()) if self.offset_error_y_input.text() else auto_error_y
-
-            # Use manual values if they differ from 0, otherwise use automatic values
-            offset_error_x = manual_error_x if self.offset_error_x_input.text() and manual_error_x != 0.0 else auto_error_x
-            offset_error_y = manual_error_y if self.offset_error_y_input.text() and manual_error_y != 0.0 else auto_error_y
-
-            if self.inspect_data_mgr is None:
-                self.info_label.setText("✗ Error: Robot inspection control not connected")
-                return
-
-            # Send inspection command to robot with custom offset values
-            # Robot will position gripper so inspection camera views the target at (x_mm, y_mm)
-            # at inspection_height (103.4mm from config.json)
-            if self.inspect_data_mgr.send_inspect_command(x_mm, y_mm, angle=angle, width=0.0, height=0.0,
-                                                          offset_x=offset_x, offset_y=offset_y, offset_error_x=offset_error_x, offset_error_y=offset_error_y):
-                self.info_label.setText(f"✓ Inspection sent: Target ({x_mm:.1f}, {y_mm:.1f}) mm, Angle: {angle:.1f}°, Offset: ({offset_x:.1f}, {offset_y:.1f}), Error: ({offset_error_x:.1f}, {offset_error_y:.1f})")
-                print(f"[INFO] Sent inspection command: Target ({x_mm:.1f}, {y_mm:.1f}) mm, Angle: {angle:.1f}°, Offset: ({offset_x:.1f}, {offset_y:.1f}), Error: ({offset_error_x:.1f}, {offset_error_y:.1f}) [Auto-calculated from angle]")
-            else:
-                self.info_label.setText("✗ Error: Failed to send inspection command")
-
-        except ValueError:
-            self.info_label.setText("✗ Error: Please enter valid numbers for X, Y, Angle, and Offsets")
-
-    def send_home(self):
-        """Send home command to robot via shared memory"""
-        try:
-            if self.inspect_data_mgr is None:
-                self.info_label.setText("✗ Error: Robot inspection control not connected")
-                return
-
-            # Send home command to robot
-            if self.inspect_data_mgr.send_home_command():
-                self.info_label.setText("✓ Home command sent - Robot moving to home position")
-                print(f"[INFO] Sent home command to robot")
-                self.status_label.setText("Status: Robot moving to home position...")
-            else:
-                self.info_label.setText("✗ Error: Failed to send home command")
-
-        except Exception as e:
-            self.info_label.setText(f"✗ Error: {str(e)}")
-
-    def on_detection_click(self, x, y):
-        """Handle click on detection camera - show info panel with coordinates and auto-fill angle if clicked on object"""
-        self.mouse_click_x = x
-        self.mouse_click_y = y
-        self.show_info_panel = True
-
-        # Convert click position to workspace coordinates
-        if self.H_camera_to_workspace is not None:
-            click_pt = np.array([[x, y]], dtype=np.float32).reshape(-1, 1, 2)
-            workspace_coord = cv2.perspectiveTransform(click_pt, self.H_camera_to_workspace).reshape(-1, 2)
-            click_x_mm = workspace_coord[0][0]
-            click_y_mm = workspace_coord[0][1]
-            self.clicked_workspace_pos = (click_x_mm, click_y_mm)
-
-            # Auto-fill coordinates in input fields (use actual click position)
-            self.x_input.setText(f"{click_x_mm:.1f}")
-            self.y_input.setText(f"{click_y_mm:.1f}")
-
-            # Check if clicked on any detected object to auto-fill angle
-            clicked_on_object = False
-            for obj_data in self.detected_objects:
-                if self.point_in_polygon((x, y), obj_data['corners']):
-                    clicked_on_object = True
-                    # Auto-fill angle from detected object (coordinates already set to click position)
-                    self.angle_input.setText(f"{obj_data['angle']:.0f}")
-                    self.status_label.setText(f"Status: Clicked at ({click_x_mm:.1f}, {click_y_mm:.1f}) mm - Object {obj_data['id']}, Angle: {obj_data['angle']:.1f}° ✓")
-                    break
-
-            # If not clicked on object, just show click coordinates
-            if not clicked_on_object:
-                # Check if inside workspace
-                workspace_width = self.config.get("workspace", {}).get("width", 300)
-                workspace_height = self.config.get("workspace", {}).get("height", 300)
-
-                if 0 <= click_x_mm <= workspace_width and 0 <= click_y_mm <= workspace_height:
-                    self.status_label.setText(f"Status: Clicked at ({click_x_mm:.1f}, {click_y_mm:.1f}) mm - In workspace ✓")
+                if initial_mtime is None:
+                    # File was just created
+                    calibration_complete = True
+                    print(f"\n[Calibration] New calibration file detected!")
+                elif current_mtime > initial_mtime:
+                    # File was modified (overwritten)
+                    calibration_complete = True
+                    print(f"\n[Calibration] Calibration file updated!")
                 else:
-                    self.status_label.setText(f"Status: Clicked at ({click_x_mm:.1f}, {click_y_mm:.1f}) mm - Outside workspace")
+                    # File exists but hasn't been modified yet
+                    if wait_count % 5 == 0:
+                        print(f"[Calibration] Waiting for new calibration... ({wait_count}s)")
+            else:
+                # File doesn't exist yet
+                if wait_count % 5 == 0:
+                    print(f"[Calibration] Waiting for calibration files... ({wait_count}s)")
+
+        # Give it a moment to ensure both files are fully written
+        time.sleep(1)
+
+        print("\n" + "="*60)
+        print("[Calibration] ✅ YOLO calibration detected!")
+        print(f"[Calibration] Homography file: {homography_file}")
+        print("[Calibration] Camera calibration complete")
+        print("="*60 + "\n")
+
+    def load_homography(self):
+        """Load homography matrices for two-step coordinate transformation."""
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        homography_auto_file = os.path.join(script_dir, "homography_auto.pkl")
+        homography_det_file = os.path.join(script_dir, "homography_det_to_robot.pkl")
+
+        self.H_auto = None
+        self.H_det_to_robot = None
+
+        # Load first transformation (camera → detection workspace)
+        try:
+            with open(homography_auto_file, "rb") as f:
+                self.H_auto = pickle.load(f)
+            print(f"[Homography] ✅ Loaded camera-to-workspace transformation")
+            print(f"[Homography] File: {homography_auto_file}")
+        except FileNotFoundError:
+            print(f"[Homography] ⚠️  {homography_auto_file} not found - will be created after calibration")
+        except Exception as e:
+            print(f"[Homography] ⚠️  Could not load camera-to-workspace: {e}")
+
+        # Load second transformation (detection workspace → robot coordinates)
+        try:
+            with open(homography_det_file, "rb") as f:
+                self.H_det_to_robot = pickle.load(f)
+            print(f"[Homography] ✅ Loaded workspace-to-robot transformation")
+            print(f"[Homography] File: {homography_det_file}")
+        except FileNotFoundError:
+            print(f"[Homography] ⚠️  {homography_det_file} not found - will be created after calibration")
+        except Exception as e:
+            print(f"[Homography] ⚠️  Could not load workspace-to-robot: {e}")
+
+        if self.H_auto is not None and self.H_det_to_robot is not None:
+            print(f"[Homography] Two-step transformation ready: Camera → Workspace → Robot")
+            print(f"[Homography] This accounts for ~90° rotation between detection and robot")
+
+    def transform_detection_to_robot(self, det_x, det_y):
+        """
+        Transform detection workspace coordinates to robot coordinates.
+
+        This receives workspace coordinates [0-300mm] from YOLO detection
+        and transforms them to actual robot coordinates using H_det_to_robot.
+
+        Note: YOLO already applies H_auto internally (camera pixels → workspace),
+        so this only needs to apply the second transformation (workspace → robot).
+
+        Args:
+            det_x: X coordinate from detection workspace (0-300mm)
+            det_y: Y coordinate from detection workspace (0-300mm)
+
+        Returns:
+            (robot_x, robot_y): Transformed coordinates in robot space (mm)
+        """
+        if self.H_det_to_robot is None:
+            raise RuntimeError("Homography matrix not loaded! Cannot transform coordinates.")
+
+        # Transform workspace coordinates to robot coordinates
+        det_pt = np.array([[det_x, det_y]], dtype=np.float32).reshape(-1, 1, 2)
+        robot_pt = cv2.perspectiveTransform(det_pt, self.H_det_to_robot)
+        robot_x, robot_y = robot_pt[0][0]
+
+        return robot_x, robot_y
+
+    def is_robot_position_safe(self, robot_x, robot_y):
+        """
+        Check if robot coordinates are within workspace boundaries.
+
+        Args:
+            robot_x, robot_y: Robot coordinates (mm)
+
+        Returns:
+            bool: True if position is safe, False otherwise
+        """
+        return (ROBOT_MIN_X <= robot_x <= ROBOT_MAX_X and
+                ROBOT_MIN_Y <= robot_y <= ROBOT_MAX_Y)
+
+    def calculate_optimal_pick_angle(self, object_angle, object_width, object_height):
+        """
+        Calculate the optimal gripper angle for picking based on object dimensions.
+
+        The gripper should align to grip the narrower dimension of the object.
+
+        Args:
+            object_angle: Detected object angle in degrees (0-180)
+            object_width: Object width in mm
+            object_height: Object height in mm
+
+        Returns:
+            float: Optimal gripper yaw angle in degrees
+        """
+        if object_width <= 0 or object_height <= 0:
+            # No dimension data, use object angle directly
+            return object_angle
+
+        # Determine which dimension is smaller (should be gripped)
+        if object_width < object_height:
+            # Width is smaller - gripper should align with object angle to grip width
+            gripper_angle = object_angle
+            print(f"[Pick Logic] Width ({object_width:.1f}mm) < Height ({object_height:.1f}mm)")
+            print(f"[Pick Logic] Gripper aligns WITH object angle: {gripper_angle:.1f}°")
         else:
-            self.clicked_workspace_pos = None
-            self.status_label.setText(f"Status: Clicked at pixel ({x}, {y}) - No calibration")
+            # Height is smaller - gripper should rotate 90° RIGHT (subtract) to grip height
+            gripper_angle = object_angle - 90
+            # Normalize to -180 to 180 range (robot accepts negative angles)
+            if gripper_angle < -180:
+                gripper_angle += 360
+            print(f"[Pick Logic] Height ({object_height:.1f}mm) < Width ({object_width:.1f}mm)")
+            print(f"[Pick Logic] Gripper rotates 90° RIGHT from object: {object_angle:.1f}° → {gripper_angle:.1f}°")
 
-    def on_angle_changed(self):
-        """Called when angle input changes - no action needed, display updates automatically"""
-        pass
+        return gripper_angle
 
-    def draw_info_panel_on_frame(self, frame, x, y, info_lines, title="Info"):
-        """Draw an information panel at specified position"""
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 0.5
-        thickness = 1
-        padding = 10
-        line_height = 20
+    def calculate_optimal_inspect_angle(self, object_angle):
+        """
+        Calculate camera rotation based on object angle range.
 
-        max_width = 0
-        for line in info_lines:
-            (w, h), _ = cv2.getTextSize(line, font, font_scale, thickness)
-            max_width = max(max_width, w)
+        v1.7: Camera rotation based on angle, not orientation.
 
-        panel_width = max_width + 2 * padding
-        panel_height = len(info_lines) * line_height + 2 * padding + 25
+        Args:
+            object_angle: Detected object angle in degrees (0-180)
 
-        # Adjust position if panel goes off screen
-        if x + panel_width > frame.shape[1]:
-            x = frame.shape[1] - panel_width - 10
-        if y + panel_height > frame.shape[0]:
-            y = frame.shape[0] - panel_height - 10
+        Returns:
+            float: Camera angle with rotation applied
+        """
+        # Normalize angle to 0-180 range
+        angle_norm = object_angle % 180
 
-        # Draw semi-transparent background
-        overlay = frame.copy()
-        cv2.rectangle(overlay, (x, y), (x + panel_width, y + panel_height), (0, 0, 0), -1)
-        cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
+        # Apply rotation based on angle range
+        if 0 <= angle_norm < 80:
+            # Angle 0-79°: Add 270° rotation
+            camera_rotation = 0
+        else:  # 80-180°
+            # Angle 80-180°: Add 90° rotation
+            camera_rotation = 180
 
-        # Draw border
-        cv2.rectangle(frame, (x, y), (x + panel_width, y + panel_height), (0, 255, 255), 2)
+        return object_angle + camera_rotation
 
-        # Draw title
-        cv2.rectangle(frame, (x, y), (x + panel_width, y + 25), (0, 255, 255), -1)
-        cv2.putText(frame, title, (x + padding, y + 18), font, 0.6, (0, 0, 0), 2, cv2.LINE_AA)
+    def connect_robot(self):
+        """Connect to the xArm robot."""
+        try:
+            print(f"[Robot] Connecting to xArm at {self.robot_ip}...")
+            self._arm = XArmAPI(self.robot_ip)
+            time.sleep(0.5)
+            print("[Robot] ✅ Connected successfully!")
+        except Exception as e:
+            print(f"[Robot] ❌ Connection failed: {e}")
+            raise
 
-        # Draw info lines
-        y_offset = y + 40
-        for line in info_lines:
-            cv2.putText(frame, line, (x + padding, y_offset), font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
-            y_offset += line_height
+    def initialize_robot(self):
+        """Initialize robot to ready state."""
+        try:
+            print("[Robot] Initializing...")
+            self._arm.motion_enable(True)
+            self._arm.clean_warn()
+            self._arm.clean_error()
+            self._arm.set_mode(0)
+            self._arm.set_state(0)
+            time.sleep(1)
 
-        return frame
+            tcp_speed = self.config.get("tcp_speed", 300)
+            tcp_acc = self.config.get("tcp_acc", 2000)
+            angle_speed = self.config.get("angle_speed", 20)
+            angle_acc = self.config.get("angle_acc", 500)
 
-    def update_cameras(self):
-        """Update both camera displays"""
-        # Initialize cameras on first update (lazy initialization to avoid DLL conflicts)
-        if self.detection_camera is None:
-            self.init_cameras()
-            if self.detection_camera is None:
-                # Failed to initialize, try again next time
-                return
+            self._arm.set_tcp_maxacc(tcp_acc)
+            self._arm.set_joint_maxacc(angle_acc)
 
-        # Update detection camera
-        if self.detection_camera:
+            print(f"[Robot] TCP speed: {tcp_speed} mm/s, acc: {tcp_acc} mm/s²")
+            print(f"[Robot] Joint speed: {angle_speed}°/s, acc: {angle_acc}°/s²")
+            print("[Robot] ✅ Initialization complete!")
+
+        except Exception as e:
+            print(f"[Robot] ❌ Initialization failed: {e}")
+            raise
+
+    def go_home(self, wait=True):
+        """Move robot to home position.
+
+        Args:
+            wait: If True, wait for movement to complete. If False, return immediately.
+        """
+        try:
+            print("[Robot] Moving to home position...")
+            self._arm.set_servo_angle(angle=self.home_position, speed=80, wait=wait)
+            if wait:
+                print("[Robot] ✅ Home position reached")
+            else:
+                print("[Robot] Home position command sent (not waiting)")
+            return True
+        except Exception as e:
+            print(f"[Robot] ❌ Failed to go home: {e}")
+            return False
+
+    def go_to_calibration_position(self):
+        """Move robot to calibration position for camera calibration."""
+        try:
+            print("\n" + "="*60)
+            print("[Calibration] Moving to calibration position...")
+            print(f"[Calibration] Target: X={self.calibration_position['x']:.1f}, "
+                  f"Y={self.calibration_position['y']:.1f}, "
+                  f"Z={self.calibration_position['z']:.1f} mm")
+            print(f"[Calibration] Orientation: Roll={self.calibration_position['roll']:.1f}°, "
+                  f"Pitch={self.calibration_position['pitch']:.1f}°, "
+                  f"Yaw={self.calibration_position['yaw']:.1f}°")
+            print("="*60)
+
+            code = self._arm.set_position(
+                x=self.calibration_position['x'],
+                y=self.calibration_position['y'],
+                z=self.calibration_position['z'],
+                roll=self.calibration_position['roll'],
+                pitch=self.calibration_position['pitch'],
+                yaw=self.calibration_position['yaw'],
+                speed=self.config.get("tcp_speed", 300),
+                wait=True
+            )
+
+            if code == 0:
+                print("[Calibration] ✅ Calibration position reached")
+                print("[Calibration] Robot ready for camera calibration")
+                print("="*60 + "\n")
+                return True
+            else:
+                print(f"[Calibration] ❌ Failed with code: {code}")
+                print("="*60 + "\n")
+                return False
+
+        except Exception as e:
+            print(f"[Calibration] ❌ Error: {e}")
+            print("="*60 + "\n")
+            return False
+
+    def move_to_position(self, det_x, det_y, z=None):
+        """
+        Move TCP to specified position using detection coordinates.
+
+        Args:
+            det_x, det_y: Position in detection coordinate system (mm)
+            z: Z height (optional, uses safe_height if None)
+        """
+        try:
+            if z is None:
+                z = self.safe_height
+
+            # Transform detection coordinates to robot coordinates
+            robot_x, robot_y = self.transform_detection_to_robot(det_x, det_y)
+
+            # Check if robot position is within workspace
+            if not self.is_robot_position_safe(robot_x, robot_y):
+                print(f"\n{'='*60}")
+                print(f"[Move] ❌ POSITION OUT OF BOUNDS")
+                print(f"[Move] Robot position: ({robot_x:.1f}, {robot_y:.1f}) mm")
+                print(f"[Move] Workspace limits: X=[{ROBOT_MIN_X:.1f}-{ROBOT_MAX_X:.1f}], Y=[{ROBOT_MIN_Y:.1f}-{ROBOT_MAX_Y:.1f}]")
+                print(f"[Move] Cannot proceed - position outside robot workspace!")
+                print(f"{'='*60}\n")
+                return False
+
+            print(f"\n{'='*60}")
+            print(f"[Move] Detection coords: ({det_x:.1f}, {det_y:.1f}) mm")
+            print(f"[Move] Robot coords: ({robot_x:.1f}, {robot_y:.1f}) mm")
+            print(f"[Move] Target height: {z:.1f} mm")
+
+            current_pos = self._arm.get_position()[1][:3]
+            print(f"[Move] Current position: ({current_pos[0]:.1f}, {current_pos[1]:.1f}, {current_pos[2]:.1f})")
+
+            target_pos = [robot_x, robot_y, z]
+            print(f"[Move] Moving to: ({target_pos[0]:.1f}, {target_pos[1]:.1f}, {target_pos[2]:.1f})")
+
+            code = self._arm.set_position(
+                x=target_pos[0],
+                y=target_pos[1],
+                z=target_pos[2],
+                roll=180,
+                pitch=0,
+                yaw=0,
+                speed=self.config.get("tcp_speed", 300),
+                wait=True
+            )
+
+            if code == 0:
+                print(f"[Move] ✅ Movement successful!")
+                print(f"{'='*60}\n")
+                return True
+            else:
+                print(f"[Move] ❌ Movement failed with code: {code}")
+                print(f"{'='*60}\n")
+                return False
+
+        except Exception as e:
+            print(f"[Robot Error] Move failed: {e}")
+            print(f"{'='*60}\n")
+            return False
+
+    def pick_sequence(self, det_x, det_y, object_angle=0.0, object_width=0.0, object_height=0.0):
+        """
+        Execute pick sequence with automatic gripper angle adjustment.
+
+        Args:
+            det_x, det_y: Position in detection coordinates (mm)
+            object_angle: Detected object angle in degrees (0-180)
+            object_width: Object width in mm
+            object_height: Object height in mm
+        """
+        try:
+            # Transform to robot coordinates
+            robot_x, robot_y = self.transform_detection_to_robot(det_x, det_y)
+
+            # Check if robot position is within workspace
+            if not self.is_robot_position_safe(robot_x, robot_y):
+                print(f"\n{'='*60}")
+                print(f"[Pick] ❌ POSITION OUT OF BOUNDS")
+                print(f"[Pick] Robot position: ({robot_x:.1f}, {robot_y:.1f}) mm")
+                print(f"[Pick] Workspace limits: X=[{ROBOT_MIN_X:.1f}-{ROBOT_MAX_X:.1f}], Y=[{ROBOT_MIN_Y:.1f}-{ROBOT_MAX_Y:.1f}]")
+                print(f"[Pick] Cannot proceed - position outside robot workspace!")
+                print(f"{'='*60}\n")
+                return False
+
+            # Calculate optimal gripper angle based on object dimensions
+            gripper_angle = self.calculate_optimal_pick_angle(object_angle, object_width, object_height)
+
+            # Note: Lite6 gripper uses simple open/close commands (no position control)
+            if object_width > 0 and object_height > 0:
+                print(f"[Pick] Object size: {object_width:.1f}x{object_height:.1f} mm")
+
+            print(f"\n{'='*60}")
+            print(f"[Pick] PICK SEQUENCE START")
+            print(f"[Pick] Detection coords: ({det_x:.1f}, {det_y:.1f}) mm")
+            print(f"[Pick] Robot coords: ({robot_x:.1f}, {robot_y:.1f}) mm")
+            print(f"[Pick] Object angle: {object_angle:.1f}° → Gripper angle: {gripper_angle:.1f}°")
+            print(f"{'='*60}")
+
+            # Step 1: Move to safe height above target
+            print(f"[Pick] Step 1/4: Moving to safe height ({self.safe_height}mm)...")
+            code = self._arm.set_position(
+                x=robot_x, y=robot_y, z=self.safe_height,
+                roll=180, pitch=0, yaw=gripper_angle,
+                speed=self.config.get("tcp_speed", 300),
+                wait=True
+            )
+            if code != 0:
+                print(f"[Pick] ❌ Failed at step 1")
+                return False
+
+            # Step 2: Open gripper (Lite6 gripper - no position control, just open/close)
+            print(f"[Pick] Step 2/4: Opening gripper...")
+            self._arm.open_lite6_gripper()
+            time.sleep(1.0)
+
+            # Step 3: Move down to pick height
+            print(f"[Pick] Step 3/4: Moving to pick height ({self.pick_height}mm)...")
+            code = self._arm.set_position(
+                x=robot_x, y=robot_y, z=self.pick_height,
+                roll=180, pitch=0, yaw=gripper_angle,
+                speed=100,
+                wait=True
+            )
+            if code != 0:
+                print(f"[Pick] ❌ Failed at step 3")
+                return False
+
+            # Step 4: Close gripper
+            print(f"[Pick] Step 4/5: Closing gripper...")
+            self._arm.close_lite6_gripper()
+            time.sleep(1.0)
+
+            # Step 5: Update TCP load for picked object
+            print(f"[Pick] Step 5/5: Updating TCP load...")
+            self._arm.set_tcp_load(0.35, [0, 0, 40])
+
+            # Return to safe height
+            print(f"[Pick] Returning to safe height...")
+            code = self._arm.set_position(
+                x=robot_x, y=robot_y, z=self.safe_height,
+                roll=180, pitch=0, yaw=gripper_angle,
+                speed=self.config.get("tcp_speed", 300),
+                wait=True
+            )
+
+            print(f"[Pick] ✅ PICK SEQUENCE COMPLETE")
+            print(f"{'='*60}\n")
+            return True
+
+        except Exception as e:
+            print(f"[Robot Error] Pick sequence failed: {e}")
+            print(f"{'='*60}\n")
+            return False
+
+    def place_sequence(self, det_x, det_y, maintain_angle=False, object_angle=0.0):
+        """
+        Execute place sequence.
+
+        Args:
+            det_x, det_y: Position in detection coordinates (mm)
+            maintain_angle: If True, maintain the angle from pick operation
+            object_angle: Angle to use for placement (degrees)
+        """
+        try:
+            # Transform to robot coordinates
+            robot_x, robot_y = self.transform_detection_to_robot(det_x, det_y)
+
+            # Check if robot position is within workspace
+            if not self.is_robot_position_safe(robot_x, robot_y):
+                print(f"\n{'='*60}")
+                print(f"[Place] ❌ POSITION OUT OF BOUNDS")
+                print(f"[Place] Robot position: ({robot_x:.1f}, {robot_y:.1f}) mm")
+                print(f"[Place] Workspace limits: X=[{ROBOT_MIN_X:.1f}-{ROBOT_MAX_X:.1f}], Y=[{ROBOT_MIN_Y:.1f}-{ROBOT_MAX_Y:.1f}]")
+                print(f"[Place] Cannot proceed - position outside robot workspace!")
+                print(f"{'='*60}\n")
+                return False
+
+            # Determine yaw angle - use 0 if not maintaining angle
+            gripper_yaw = object_angle if maintain_angle else 0.0
+
+            print(f"\n{'='*60}")
+            print(f"[Place] PLACE SEQUENCE START")
+            print(f"[Place] Detection coords: ({det_x:.1f}, {det_y:.1f}) mm")
+            print(f"[Place] Robot coords: ({robot_x:.1f}, {robot_y:.1f}) mm")
+            if maintain_angle:
+                print(f"[Place] Maintaining angle: {gripper_yaw:.1f}°")
+            else:
+                print(f"[Place] Placing straight down (yaw: 0°)")
+            print(f"{'='*60}")
+
+            # Step 1: Move to safe height above target
+            print(f"[Place] Step 1/4: Moving to safe height ({self.safe_height}mm)...")
+            code = self._arm.set_position(
+                x=robot_x, y=robot_y, z=self.safe_height,
+                roll=180, pitch=0, yaw=gripper_yaw,
+                speed=self.config.get("tcp_speed", 300),
+                wait=True
+            )
+            if code != 0:
+                print(f"[Place] ❌ Failed at step 1")
+                return False
+
+            # Step 2: Move down to pick height
+            print(f"[Place] Step 2/4: Moving to place height ({self.pick_height}mm)...")
+            code = self._arm.set_position(
+                x=robot_x, y=robot_y, z=self.pick_height,
+                roll=180, pitch=0, yaw=gripper_yaw,
+                speed=100,
+                wait=True
+            )
+            if code != 0:
+                print(f"[Place] ❌ Failed at step 2")
+                return False
+
+            # Step 3: Open gripper
+            print(f"[Place] Step 3/4: Opening gripper...")
+            self._arm.open_lite6_gripper()
+            time.sleep(1.0)
+
+            # Step 4: Reset TCP load
+            print(f"[Place] Step 4/5: Resetting TCP load...")
+            self._arm.set_tcp_load(0.277, [0, 0, 30])
+
+            # Step 5: Return to safe height
+            print(f"[Place] Step 5/5: Returning to safe height...")
+            code = self._arm.set_position(
+                x=robot_x, y=robot_y, z=self.safe_height,
+                roll=180, pitch=0, yaw=gripper_yaw,
+                speed=self.config.get("tcp_speed", 300),
+                wait=True
+            )
+
+            # Stop gripper
+            self._arm.stop_lite6_gripper()
+
+            print(f"[Place] ✅ PLACE SEQUENCE COMPLETE")
+            print(f"{'='*60}\n")
+            return True
+
+        except Exception as e:
+            print(f"[Robot Error] Place sequence failed: {e}")
+            print(f"{'='*60}\n")
+            return False
+
+    def inspect_sequence(self, target_det_x, target_det_y, object_angle=0.0, object_width=0.0, object_height=0.0, offset_x=CAMERA_OFFSET_X, offset_y=CAMERA_OFFSET_Y):
+        """
+        Execute inspection sequence - move gripper so inspection camera views target.
+
+        The inspection camera is mounted on the gripper with an offset.
+        To view the target at the camera center, we need to position the gripper
+        at: gripper_position = target_position - camera_offset
+
+        Args:
+            target_det_x, target_det_y: Target position in detection coordinates (mm)
+            object_angle: Object angle in degrees (0-180) - used to calculate optimal camera angle
+            object_width, object_height: Object dimensions in mm
+            offset_x, offset_y: Camera offset from gripper center point (mm)
+        """
+        try:
+            import math
+
+            # v1.7: Separate camera rotation from position calculation
+            # offset_position is used ONLY for position offset calculation
+            # camera_angle is used ONLY for camera/gripper rotation
+            offset_position = object_angle  # Use object angle directly for position calculation
+            camera_angle = self.calculate_optimal_inspect_angle(object_angle)  # Separate camera rotation
+
+            # Calculate offset magnitude and direction
+            offset_magnitude = math.sqrt(offset_x**2 + offset_y**2)
+
+            # Determine object orientation
+            default_direction_name = "Forward"
+            # v1.7: Determine robot approach direction based on ANGLE, not orientation
+            default_direction_offset = 0  # Offset from offset_position
+            offset_position_adjustment = 0  # No adjustment needed
+
+            # Determine direction based on object angle range
+            # Normalize angle to 0-180 range
+            angle_norm = object_angle % 180
+
+            if 0 <= angle_norm < 80:
+                # Angle 0-79°: Approach with 270° offset
+                default_direction_name = "Left"
+                default_direction_offset = 270
+            else:  # 80-180°
+                # Angle 80-180°: Approach with 90° offset
+                default_direction_name = "Backward"
+                default_direction_offset = 90
+
+            if object_width > 0 and object_height > 0:
+                aspect_ratio = object_width / object_height
+                print(f"[Inspect Logic] Object angle: {object_angle:.1f}° (range: {angle_norm:.1f}°)")
+                print(f"[Inspect Logic] Object size: {object_width:.1f}x{object_height:.1f}mm - Aspect: {aspect_ratio:.2f}")
+                print(f"[Inspect Logic] Angle-based direction: {default_direction_name} (offset: {default_direction_offset}°)")
+
+            # Apply position-based angle adjustment
+            offset_position = offset_position + offset_position_adjustment
+
+            # Try 4 possible offset directions (0°, 90°, 180°, 270° relative to object angle)
+            # This represents: forward, right, backward, left relative to the object orientation
+            possible_angles = [
+                offset_position,           # Forward (same direction as object)
+                offset_position + 90,      # Right side
+                offset_position + 180,     # Backward (opposite direction)
+                offset_position + 270      # Left side
+            ]
+
+            # Workspace boundaries in detection coordinates
+            workspace_min_x = 0
+            workspace_max_x = 300
+            workspace_min_y = 0
+            workspace_max_y = 300
+
+            best_position = None
+            best_angle = None
+
+            print(f"\n{'='*60}")
+            print(f"[Inspect] SMART WORKSPACE-AWARE POSITIONING")
+            print(f"[Inspect] Target: ({target_det_x:.1f}, {target_det_y:.1f}) mm")
+            print(f"[Inspect] Object angle: {object_angle:.1f}° → Base offset position angle: {offset_position:.1f}°")
+            print(f"[Inspect] Camera offset magnitude: {offset_magnitude:.1f} mm")
+
+            # Try default direction first if orientation is known
+            if default_direction_offset > 0:
+                default_angle = offset_position + default_direction_offset
+                default_angle_norm = default_angle % 360
+                angle_rad = math.radians(default_angle_norm)
+                default_offset_x = offset_magnitude * math.cos(angle_rad)
+                default_offset_y = offset_magnitude * math.sin(angle_rad)
+                default_gripper_x = target_det_x + default_offset_x
+                default_gripper_y = target_det_y + default_offset_y
+
+                in_workspace = (workspace_min_x <= default_gripper_x <= workspace_max_x and
+                               workspace_min_y <= default_gripper_y <= workspace_max_y)
+
+                print(f"[Inspect] Trying default direction ({default_direction_name}): "
+                      f"Angle={default_angle_norm:.1f}°, "
+                      f"Pos=({default_gripper_x:.1f}, {default_gripper_y:.1f}) mm - "
+                      f"{'✓ IN WORKSPACE' if in_workspace else '✗ OUT OF BOUNDS'}")
+
+                if in_workspace:
+                    best_position = (default_gripper_x, default_gripper_y)
+                    best_angle = default_angle_norm
+                    print(f"[Inspect] ✓ Using default direction: {default_direction_name}")
+
+            # If default didn't work, test all 4 directions
+            if best_position is None:
+                print(f"[Inspect] Default direction not valid, testing all 4 directions...")
+
+                # Test each possible angle
+                for i, test_angle in enumerate(possible_angles):
+                    # Normalize angle
+                    test_angle_norm = test_angle % 360
+
+                    # Calculate offset position based on this angle
+                    angle_rad = math.radians(test_angle_norm)
+                    test_offset_x = offset_magnitude * math.cos(angle_rad)
+                    test_offset_y = offset_magnitude * math.sin(angle_rad)
+
+                    # Calculate gripper position
+                    test_gripper_x = target_det_x + test_offset_x
+                    test_gripper_y = target_det_y + test_offset_y
+
+                    # Check if this position is in workspace
+                    in_workspace = (workspace_min_x <= test_gripper_x <= workspace_max_x and
+                                   workspace_min_y <= test_gripper_y <= workspace_max_y)
+
+                    direction_names = ["Forward", "Right", "Backward", "Left"]
+                    print(f"[Inspect]   Option {i+1} ({direction_names[i]}): "
+                          f"Angle={test_angle_norm:.1f}°, "
+                          f"Pos=({test_gripper_x:.1f}, {test_gripper_y:.1f}) mm - "
+                          f"{'✓ IN WORKSPACE' if in_workspace else '✗ OUT OF BOUNDS'}")
+
+                    # Use first valid position found
+                    if in_workspace and best_position is None:
+                        best_position = (test_gripper_x, test_gripper_y)
+                        best_angle = test_angle_norm
+                if in_workspace and best_position is None:
+                    best_position = (test_gripper_x, test_gripper_y)
+                    best_angle = test_angle_norm
+
+            # If no valid position found, use closest to center
+            if best_position is None:
+                print(f"[Inspect] ⚠ WARNING: No position fully in workspace!")
+                print(f"[Inspect] Using position closest to workspace center...")
+
+                center_x = (workspace_max_x - workspace_min_x) / 2
+                center_y = (workspace_max_y - workspace_min_y) / 2
+
+                best_dist = float('inf')
+                for i, test_angle in enumerate(possible_angles):
+                    test_angle_norm = test_angle % 360
+                    angle_rad = math.radians(test_angle_norm)
+                    test_offset_x = offset_magnitude * math.cos(angle_rad)
+                    test_offset_y = offset_magnitude * math.sin(angle_rad)
+                    test_gripper_x = target_det_x + test_offset_x
+                    test_gripper_y = target_det_y + test_offset_y
+
+                    dist = math.sqrt((test_gripper_x - center_x)**2 + (test_gripper_y - center_y)**2)
+                    if dist < best_dist:
+                        best_dist = dist
+                        best_position = (test_gripper_x, test_gripper_y)
+                        best_angle = test_angle_norm
+
+            gripper_det_x, gripper_det_y = best_position
+            offset_position_angle = best_angle  # The selected position offset angle
+
+            print(f"[Inspect] ✓ SELECTED: Position ({gripper_det_x:.1f}, {gripper_det_y:.1f}) mm, Offset angle: {offset_position_angle:.1f}°")
+            print(f"[Inspect] Camera rotation: {camera_angle:.1f}°")
+
+            # Transform gripper position to robot coordinates
+            robot_x, robot_y = self.transform_detection_to_robot(gripper_det_x, gripper_det_y)
+
+            # Check if robot position is within workspace
+            if not self.is_robot_position_safe(robot_x, robot_y):
+                print(f"[Inspect] ❌ POSITION OUT OF BOUNDS (robot coordinates)")
+                print(f"[Inspect] Robot position: ({robot_x:.1f}, {robot_y:.1f}) mm")
+                print(f"[Inspect] Workspace limits: X=[{ROBOT_MIN_X:.1f}-{ROBOT_MAX_X:.1f}], Y=[{ROBOT_MIN_Y:.1f}-{ROBOT_MAX_Y:.1f}]")
+                print(f"[Inspect] Cannot proceed - position outside robot workspace!")
+                print(f"{'='*60}\n")
+                return False
+
+            print(f"[Inspect] Gripper position (robot): ({robot_x:.1f}, {robot_y:.1f}) mm")
+            print(f"[Inspect] Inspection height: {self.inspect_height} mm")
+            print(f"{'='*60}")
+
+            # Step 1: Move to safe height first
+            print(f"[Inspect] Step 1/2: Moving to safe height...")
+            current_pos = self._arm.get_position()[1]
+            code = self._arm.set_position(
+                x=current_pos[0],
+                y=current_pos[1],
+                z=self.safe_height,
+                roll=180,
+                pitch=0,
+                yaw=camera_angle,
+                speed=self.config.get("tcp_speed", 300),
+                wait=True
+            )
+            if code != 0:
+                print(f"[Inspect] ❌ Failed at step 1")
+                return False
+
+            # Step 2: Move to inspection position with camera angle
+            print(f"[Inspect] Step 2/2: Moving to inspection position (yaw: {camera_angle:.1f}°)...")
+            code = self._arm.set_position(
+                x=robot_x,
+                y=robot_y,
+                z=self.inspect_height,
+                roll=180,
+                pitch=0,
+                yaw=camera_angle,  # v1.7: Using camera_angle instead of robot_yaw
+                speed=self.config.get("tcp_speed", 300),
+                wait=True
+            )
+
+            if code == 0:
+                print(f"[Inspect] ✅ INSPECTION POSITION REACHED")
+                print(f"[Inspect] The inspection camera should now be viewing the target")
+                print(f"{'='*60}\n")
+                return True
+            else:
+                print(f"[Inspect] ❌ Movement failed with code: {code}")
+                print(f"{'='*60}\n")
+                return False
+
+        except Exception as e:
+            print(f"[Robot Error] Inspection sequence failed: {e}")
+            print(f"{'='*60}\n")
+            return False
+
+    def check_and_recover(self):
+        """Check robot state and recover from errors if needed."""
+        try:
+            state = self._arm.get_state()
+            if state[0] == 0 and state[1] in [3, 4]:
+                print("[Robot] Error detected! Attempting recovery...")
+                self._arm.clean_warn()
+                self._arm.clean_error()
+                self._arm.motion_enable(True)
+                self._arm.set_mode(0)
+                self._arm.set_state(0)
+                time.sleep(0.5)
+                print("[Robot] Recovery successful.")
+                return True
+            return False
+        except Exception as e:
+            print(f"[Robot] Recovery check failed: {e}")
+            return False
+
+    def shutdown(self, emergency=False):
+        """Shutdown robot safely.
+
+        Args:
+            emergency: If True, skip waiting for movements (for Ctrl+C shutdown)
+        """
+        print("\n[Robot] Shutting down...")
+        try:
+            # During emergency shutdown, don't wait for home position to complete
+            self.go_home(wait=not emergency)
+            self._arm.set_state(4)
+            print("[Robot] Shutdown complete.")
+        except KeyboardInterrupt:
+            print("[Robot] Shutdown interrupted - stopping immediately")
             try:
-                image_result = self.detection_camera.GetNextImage(1000)
-                if not image_result.IsIncomplete():
-                    # Convert to OpenCV format
-                    width = image_result.GetWidth()
-                    height = image_result.GetHeight()
-                    image_data = image_result.GetNDArray()
-
-                    # Handle different pixel formats
-                    if len(image_data.shape) == 2:
-                        frame = cv2.cvtColor(image_data, cv2.COLOR_GRAY2BGR)
-                    elif len(image_data.shape) == 3:
-                        frame = image_data.copy()
-                    else:
-                        image_result.Release()
-                        return
-
-                    image_result.Release()
-
-                    # Run YOLO detection if model is loaded
-                    self.detected_objects = []  # Clear previous detections
-                    if self.model is not None:
-                        try:
-                            results = self.model(frame, conf=self.config.get("detection_confidence", 0.7))
-                            if results and len(results) > 0 and hasattr(results[0], 'obb') and results[0].obb is not None:
-                                obb_preds = results[0].obb
-
-                                for i, obb in enumerate(obb_preds, 1):
-                                    if hasattr(obb, "xyxyxyxy"):
-                                        corners = obb.xyxyxyxy.cpu().numpy().reshape(-1, 2)
-                                    elif hasattr(obb, "xyxy"):
-                                        corners = obb.xyxy.cpu().numpy().reshape(-1, 2)
-                                    else:
-                                        continue
-
-                                    # Transform corners to workspace coordinates
-                                    if self.H_camera_to_workspace is not None:
-                                        transformed = self.transform_points(corners, self.H_camera_to_workspace)
-                                        is_inside = self.is_inside_workspace(transformed)
-
-                                        if is_inside:
-                                            # Calculate object properties in workspace coordinates
-                                            center = np.mean(transformed, axis=0)
-                                            angle = self.get_angle(transformed)
-
-                                            side1 = np.linalg.norm(transformed[1] - transformed[0])
-                                            side2 = np.linalg.norm(transformed[2] - transformed[1])
-                                            width_mm = round(max(side1, side2), 1)
-                                            height_mm = round(min(side1, side2), 1)
-
-                                            x_mm, y_mm = round(center[0], 1), round(center[1], 1)
-                                            angle_deg = round(angle, 1)
-
-                                            # Store object data
-                                            self.detected_objects.append({
-                                                'id': i,
-                                                'corners': corners.astype(int),
-                                                'x_mm': x_mm,
-                                                'y_mm': y_mm,
-                                                'angle': angle_deg,
-                                                'width': width_mm,
-                                                'height': height_mm
-                                            })
-
-                                            # Draw bounding box (green for inside workspace)
-                                            corners_int = corners.astype(int)
-                                            cv2.polylines(frame, [corners_int], isClosed=True, color=(0, 255, 0), thickness=2)
-
-                                            # Draw center point
-                                            center_img = np.mean(corners, axis=0).astype(int)
-                                            cv2.circle(frame, tuple(center_img), 5, (0, 0, 255), -1)
-                                            cv2.circle(frame, tuple(center_img), 5, (255, 255, 255), 1)
-
-                                            # Draw object label with angle
-                                            label_pos = tuple(corners_int[0] - [0, 10])
-                                            label_text = f"Obj {i}: {angle_deg:.0f}"
-                                            cv2.putText(frame, label_text, label_pos,
-                                                      cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
-                        except Exception as e:
-                            print(f"[DEBUG] YOLO detection error: {e}")
-
-                    # Draw test points
-                    if self.H_workspace_to_camera is not None:
-                        for x_mm, y_mm in self.test_points:
-                            workspace_pt = np.array([[[x_mm, y_mm]]], dtype=np.float32)
-                            camera_pt = cv2.perspectiveTransform(workspace_pt, self.H_workspace_to_camera)
-
-                            px = int(camera_pt[0][0][0])
-                            py = int(camera_pt[0][0][1])
-
-                            if 0 <= px < width and 0 <= py < height:
-                                cv2.circle(frame, (px, py), 3, (0, 0, 255), -1, cv2.LINE_AA)
-                                workspace_label = f"({x_mm:.1f}, {y_mm:.1f}) mm"
-                                label_x = px + 10
-                                label_y = py - 10
-                                (w, h), _ = cv2.getTextSize(workspace_label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                                cv2.rectangle(frame, (label_x - 2, label_y - h - 2),
-                                             (label_x + w + 2, label_y + 2), (0, 0, 0), -1)
-                                cv2.putText(frame, workspace_label, (label_x, label_y),
-                                          cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
-
-                        # Draw workspace boundary
-                        workspace_width = self.config.get("workspace", {}).get("width", 300)
-                        workspace_height = self.config.get("workspace", {}).get("height", 300)
-                        workspace_corners = np.array([
-                            [[0, 0]], [[workspace_width, 0]],
-                            [[workspace_width, workspace_height]], [[0, workspace_height]]
-                        ], dtype=np.float32)
-                        camera_corners = cv2.perspectiveTransform(workspace_corners, self.H_workspace_to_camera)
-                        camera_corners = camera_corners.astype(np.int32)
-                        cv2.polylines(frame, [camera_corners], isClosed=True, color=(0, 255, 255), thickness=2)
-
-                        # Draw angle indicator at current input position
-                        try:
-                            if self.x_input.text() and self.y_input.text() and self.angle_input.text():
-                                target_x_mm = float(self.x_input.text())
-                                target_y_mm = float(self.y_input.text())
-                                angle_deg = float(self.angle_input.text())
-
-                                # Convert workspace position to camera pixels
-                                target_pt = np.array([[[target_x_mm, target_y_mm]]], dtype=np.float32)
-                                target_px = cv2.perspectiveTransform(target_pt, self.H_workspace_to_camera)
-                                center_x = int(target_px[0][0][0])
-                                center_y = int(target_px[0][0][1])
-
-                                if 0 <= center_x < width and 0 <= center_y < height:
-                                    # Draw angle indicator line
-                                    # Line length in pixels
-                                    line_length = 50
-
-                                    # Convert angle to radians (0° = horizontal right, counter-clockwise)
-                                    angle_rad = np.radians(angle_deg)
-
-                                    # Calculate end point of angle line
-                                    end_x = int(center_x + line_length * np.cos(angle_rad))
-                                    end_y = int(center_y - line_length * np.sin(angle_rad))  # Subtract because Y increases downward
-
-                                    # Draw the angle indicator line
-                                    cv2.line(frame, (center_x, center_y), (end_x, end_y), (255, 0, 255), 2, cv2.LINE_AA)
-
-                                    # Draw arrowhead at end
-                                    cv2.arrowedLine(frame, (center_x, center_y), (end_x, end_y), (255, 0, 255), 2, cv2.LINE_AA, tipLength=0.3)
-
-                                    # Draw angle label
-                                    label = f"{angle_deg:.0f}"
-                                    label_pos = (center_x + 10, center_y - 10)
-                                    cv2.putText(frame, label, label_pos, cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2, cv2.LINE_AA)
-                        except (ValueError, AttributeError):
-                            pass  # Ignore if inputs are invalid
-
-                    # Draw info panel if showing coordinates
-                    if self.show_info_panel and self.clicked_workspace_pos is not None:
-                        workspace_width = self.config.get("workspace", {}).get("width", 300)
-                        workspace_height = self.config.get("workspace", {}).get("height", 300)
-                        click_x_mm, click_y_mm = self.clicked_workspace_pos
-                        in_workspace = (0 <= click_x_mm <= workspace_width and 0 <= click_y_mm <= workspace_height)
-
-                        info_lines = [
-                            f"Pixel: ({self.mouse_click_x}, {self.mouse_click_y})",
-                            f"Real: ({click_x_mm:.1f}, {click_y_mm:.1f}) mm",
-                            f"In workspace: {'Yes' if in_workspace else 'No'}"
-                        ]
-
-                        frame = self.draw_info_panel_on_frame(
-                            frame,
-                            self.mouse_click_x + 10,
-                            self.mouse_click_y + 10,
-                            info_lines,
-                            "Coordinates"
-                        )
-
-                        # Draw crosshair at click position
-                        cv2.drawMarker(frame, (self.mouse_click_x, self.mouse_click_y),
-                                      (0, 255, 255), cv2.MARKER_CROSS, 20, 2)
-
-                    # Display detection camera
-                    h, w, ch = frame.shape
-
-                    # Store original image size for ClickableLabel coordinate scaling
-                    if isinstance(self.detection_label, ClickableLabel):
-                        self.detection_label.original_image_size = (w, h)
-                    qt_image = QImage(frame.data, w, h, ch * w, QImage.Format.Format_RGB888)
-                    pixmap = QPixmap.fromImage(qt_image.rgbSwapped())
-
-                    # Calculate displayed size for coordinate scaling
-                    label_w = self.detection_label.width()
-                    label_h = self.detection_label.height()
-                    scale = min(label_w / w, label_h / h)
-                    displayed_w = int(w * scale)
-                    displayed_h = int(h * scale)
-
-                    # Store displayed image size for ClickableLabel coordinate scaling
-                    if isinstance(self.detection_label, ClickableLabel):
-                        self.detection_label.displayed_image_size = (displayed_w, displayed_h)
-
-                    scaled_pixmap = pixmap.scaled(self.detection_label.size(),
-                                                 Qt.AspectRatioMode.KeepAspectRatio,
-                                                 Qt.TransformationMode.SmoothTransformation)
-                    self.detection_label.setPixmap(scaled_pixmap)
-            except Exception as e:
-                error_msg = str(e)
-                if "Spinnaker" not in error_msg and "timeout" not in error_msg.lower():
-                    print(f"[ERROR] Detection camera update failed: {error_msg}")
-
-        # Update inspection camera
-        if self.inspection_camera:
-            try:
-                image_result = self.inspection_camera.GetNextImage(1000)
-                if not image_result.IsIncomplete():
-                    image_data = image_result.GetNDArray()
-
-                    # Handle different pixel formats
-                    if len(image_data.shape) == 2:
-                        frame = cv2.cvtColor(image_data, cv2.COLOR_GRAY2BGR)
-                    elif len(image_data.shape) == 3:
-                        frame = image_data.copy()
-                    else:
-                        image_result.Release()
-                        return
-
-                    image_result.Release()
-
-                    # Draw center point marker to show gripper aim point
-                    h, w, ch = frame.shape
-                    center_x = w // 2
-                    center_y = h // 2
-
-                    # Draw red dot at center
-                    cv2.circle(frame, (center_x, center_y), 3, (0, 0, 255), -1, cv2.LINE_AA)
-
-                    # Display inspection camera
-                    qt_image = QImage(frame.data, w, h, ch * w, QImage.Format.Format_RGB888)
-                    pixmap = QPixmap.fromImage(qt_image.rgbSwapped())
-                    scaled_pixmap = pixmap.scaled(self.inspection_label.size(),
-                                                 Qt.AspectRatioMode.KeepAspectRatio,
-                                                 Qt.TransformationMode.SmoothTransformation)
-                    self.inspection_label.setPixmap(scaled_pixmap)
-            except Exception as e:
-                error_msg = str(e)
-                if "Spinnaker" not in error_msg and "timeout" not in error_msg.lower():
-                    print(f"[ERROR] Inspection camera update failed: {error_msg}")
-
-    def closeEvent(self, event):
-        """Handle window close event"""
-        # Stop timer
-        if hasattr(self, 'timer'):
-            self.timer.stop()
-
-        # Cleanup cameras
-        if self.detection_camera:
-            try:
-                self.detection_camera.EndAcquisition()
-                self.detection_camera.DeInit()
+                self._arm.set_state(4)
             except:
                 pass
+        except Exception as e:
+            print(f"[Robot] Shutdown error: {e}")
 
-        if self.inspection_camera:
-            try:
-                self.inspection_camera.EndAcquisition()
-                self.inspection_camera.DeInit()
-            except:
-                pass
 
-        if self.system:
-            try:
-                cam_list = self.system.GetCameras()
-                cam_list.Clear()
-                self.system.ReleaseInstance()
-            except:
-                pass
+class XArmClickController:
+    """Main application that monitors clicks and controls the xArm with auto-angle adjustment and inspection."""
 
-        event.accept()
+    def __init__(self):
+        """Initialize controller with automatic button-based mode selection."""
+        self.click_manager = ClickDataManager()
+        self.inspect_manager = InspectDataManager()
+        self.arm = XArmController()
+        self.running = False
+        self.emergency_stop = False
+        self.last_processed_click_time = 0
+        self.last_processed_inspect_time = 0
+
+        # Pick/Place toggle state
+        self.has_picked = False  # Track whether robot has picked an object
+        self.last_picked_angle = 0.0  # Store angle from last pick for place operation
+        self.last_picked_x = 0.0  # Store pick position for place
+        self.last_picked_y = 0.0
+
+        # Workspace limits
+        click_config = self.arm.config.get("click_control", {})
+        self.workspace_min_x = click_config.get("workspace_min_x", 0)
+        self.workspace_max_x = click_config.get("workspace_max_x", 300)
+        self.workspace_min_y = click_config.get("workspace_min_y", 0)
+        self.workspace_max_y = click_config.get("workspace_max_y", 300)
+
+        print("\n" + "="*60)
+        print("xArm CONTROLLER - PICK/PLACE TOGGLE + INSPECTION MODE")
+        print("="*60)
+        print("Mouse Button Controls:")
+        print("  • LEFT CLICK   → Move to position")
+        print("  • RIGHT CLICK  → Pick/Place TOGGLE")
+        print("    - First click:  PICK object")
+        print("    - Second click: PLACE object")
+        print("    - Third click:  PICK again (repeats)")
+        print("\nKeyboard Controls:")
+        print("  • 'T' KEY → Inspect selected object")
+        print("\nNote: You MUST place before you can pick again!")
+        print(f"\nInspection:")
+        print(f"  • Camera offset: ({CAMERA_OFFSET_X:.1f}, {CAMERA_OFFSET_Y:.1f}) ± {CAMERA_OFFSET_ERROR:.1f} mm")
+        print(f"\nWorkspace: X=[{self.workspace_min_x}-{self.workspace_max_x}], "
+              f"Y=[{self.workspace_min_y}-{self.workspace_max_y}]")
+        print(f"Safe height: {self.arm.safe_height}mm, Pick height: {self.arm.pick_height}mm")
+        print(f"Inspection height: {self.arm.inspect_height}mm")
+        print(f"Coordinate transformation: Using homography matrix (handles rotation)")
+        print("="*60 + "\n")
+
+    def is_position_safe(self, x, y):
+        """Check if position is within safe workspace bounds."""
+        return (self.workspace_min_x <= x <= self.workspace_max_x and
+                self.workspace_min_y <= y <= self.workspace_max_y)
+
+    def process_click(self, click_data):
+        """Process a new click and move the arm based on button with angle adjustment."""
+        x = click_data.get("click_x", 0)
+        y = click_data.get("click_y", 0)
+        button = click_data.get("button", "left")
+        angle = click_data.get("angle", 0.0)
+        width = click_data.get("width", 0.0)
+        height = click_data.get("height", 0.0)
+        timestamp = click_data.get("timestamp", 0)
+
+        # Ignore old or duplicate clicks
+        if timestamp <= self.last_processed_click_time:
+            return
+
+        # DEBUG: Print all available data
+        print(f"\n[DEBUG] click_data keys: {click_data.keys()}")
+        print(f"[DEBUG] click_data contents: {click_data}")
+
+        # Determine object orientation
+        orientation = "unknown"
+        grip_angle = angle
+        if width > 0 and height > 0:
+            aspect_ratio = width / height
+            if aspect_ratio > 1.5:
+                orientation = "horizontal"  # Flat: width > height → UP/DOWN
+                grip_angle = angle
+            elif aspect_ratio < 0.67:
+                orientation = "vertical"  # Tall: height > width → LEFT/RIGHT
+                grip_angle = angle + 90
+            print(f"\n[CLICK DETECTED] Position: ({x:.1f}, {y:.1f}) mm - Button: {button.upper()}")
+            print(f"[ORIENTATION] Size: {width:.1f}x{height:.1f}mm - Aspect: {aspect_ratio:.2f} - {orientation.upper()}")
+            print(f"[ORIENTATION] Detected angle: {angle:.1f}° → Grip angle: {grip_angle:.1f}°")
+        else:
+            print(f"\n[CLICK DETECTED] Position: ({x:.1f}, {y:.1f}) mm - Button: {button.upper()} - Angle: {angle:.1f}°")
+
+        # Safety check
+        if not self.is_position_safe(x, y):
+            print(f"[WARNING] Position ({x:.1f}, {y:.1f}) is outside safe workspace!")
+            print(f"[WARNING] Safe range: X=[{self.workspace_min_x}-{self.workspace_max_x}], "
+                  f"Y=[{self.workspace_min_y}-{self.workspace_max_y}]")
+            print("[WARNING] Ignoring click for safety.")
+            self.click_manager.mark_processed()
+            self.last_processed_click_time = timestamp
+            return
+
+        # Check and recover from any errors
+        self.arm.check_and_recover()
+
+        # Execute based on button
+        success = False
+        if button == "left":
+            print("[INFO] Moving arm to clicked position...")
+            success = self.arm.move_to_position(x, y)
+
+        elif button == "middle":
+            # Middle button = (unused - reserved for future features)
+            print(f"[INFO] Middle click not assigned (use 'T' key for inspection)")
+            success = True
+
+        elif button == "right":
+            # Right button = Pick/Place toggle
+            if not self.has_picked:
+                # First right-click: PICK
+                print(f"[INFO] Executing PICK sequence (grip angle: {grip_angle:.1f}°)...")
+                success = self.arm.pick_sequence(x, y, object_angle=grip_angle, object_width=width, object_height=height)
+                if success:
+                    self.has_picked = True
+                    self.last_picked_angle = grip_angle
+                    self.last_picked_x = x
+                    self.last_picked_y = y
+                    print(f"[STATE] ✅ Object picked! Next right-click will PLACE.")
+            else:
+                # Second right-click: PLACE
+                print(f"[INFO] Executing PLACE sequence (straight down)...")
+                success = self.arm.place_sequence(x, y, maintain_angle=False, object_angle=self.last_picked_angle)
+                if success:
+                    self.has_picked = False
+                    print(f"[STATE] ✅ Object placed! Next right-click will PICK.")
+        else:
+            print(f"[WARNING] Unknown button: {button}")
+
+        if success:
+            print("[SUCCESS] Operation completed!")
+        else:
+            print("[ERROR] Operation failed!")
+
+        # Mark as processed
+        self.click_manager.mark_processed()
+        self.last_processed_click_time = timestamp
+
+    def process_inspect(self, inspect_data):
+        """Process inspection command."""
+        target_x = inspect_data.get("target_x", 0)
+        target_y = inspect_data.get("target_y", 0)
+        angle = inspect_data.get("angle", 0.0)
+        width = inspect_data.get("width", 0.0)
+        height = inspect_data.get("height", 0.0)
+        offset_x = inspect_data.get("offset_x", CAMERA_OFFSET_X)
+        offset_y = inspect_data.get("offset_y", CAMERA_OFFSET_Y)
+        timestamp = inspect_data.get("timestamp", 0)
+
+        # Ignore old or duplicate commands
+        if timestamp <= self.last_processed_inspect_time:
+            return
+
+        print(f"\n[INSPECT COMMAND] Target: ({target_x:.1f}, {target_y:.1f}) mm - Angle: {angle:.1f}°")
+
+        # Check if target position is safe
+        if not self.is_position_safe(target_x, target_y):
+            print(f"[WARNING] Target position ({target_x:.1f}, {target_y:.1f}) is outside safe workspace!")
+            print("[WARNING] Ignoring inspection command for safety.")
+            self.inspect_manager.mark_processed()
+            self.last_processed_inspect_time = timestamp
+            return
+
+        # Check and recover from any errors
+        self.arm.check_and_recover()
+
+        # Execute inspection sequence with object angle and dimensions
+        print("[INFO] Executing inspection sequence...")
+        success = self.arm.inspect_sequence(target_x, target_y, object_angle=angle, object_width=width, object_height=height, offset_x=offset_x, offset_y=offset_y)
+
+        if success:
+            print("[SUCCESS] Inspection position reached!")
+        else:
+            print("[ERROR] Inspection failed!")
+
+        # Mark as processed
+        self.inspect_manager.mark_processed()
+        self.last_processed_inspect_time = timestamp
+
+    def monitor_commands(self):
+        """Monitor shared memory for new clicks and inspection commands."""
+        print("\n" + "="*60)
+        print("MONITORING FOR COMMANDS")
+        print("="*60)
+        print("Waiting for mouse clicks and inspection commands...")
+        print("Press Ctrl+C to stop")
+        print("="*60 + "\n")
+
+        self.running = True
+        check_count = 0
+
+        try:
+            while self.running:
+                # Read click data
+                click_data = self.click_manager.read_click()
+
+                # Read inspection data
+                inspect_data = self.inspect_manager.read_inspect()
+
+                # Debug counter
+                check_count += 1
+
+                # Check for new unprocessed click
+                if not click_data.get("processed", True):
+                    print(f"[DEBUG] Found unprocessed click: {click_data}")
+                    self.process_click(click_data)
+
+                # Check for new unprocessed inspection command
+                if not inspect_data.get("processed", True):
+                    print(f"[DEBUG] Found unprocessed inspect command: {inspect_data}")
+                    self.process_inspect(inspect_data)
+
+                time.sleep(0.05)  # Check at 20 Hz
+
+        except KeyboardInterrupt:
+            print("\n\n[INFO] Stopping arm controller...")
+            self.emergency_stop = True
+        finally:
+            self.stop()
+
+    def stop(self):
+        """Stop the controller and cleanup."""
+        self.running = False
+        print("\n[INFO] Stopping controller...")
+        # Use emergency=True if stopped via Ctrl+C to avoid blocking
+        emergency = getattr(self, 'emergency_stop', False)
+        self.arm.shutdown(emergency=emergency)
+        self.click_manager.cleanup()
+        self.inspect_manager.cleanup()
+        print("[INFO] Controller stopped.\n")
 
 
 def main():
-    app = QApplication(sys.argv)
-
-    # Set dark theme
-    app.setStyle("Fusion")
-    palette = app.palette()
-    palette.setColor(palette.ColorRole.Window, QColor(53, 53, 53))
-    palette.setColor(palette.ColorRole.WindowText, Qt.GlobalColor.white)
-    palette.setColor(palette.ColorRole.Base, QColor(35, 35, 35))
-    palette.setColor(palette.ColorRole.AlternateBase, QColor(53, 53, 53))
-    palette.setColor(palette.ColorRole.Text, Qt.GlobalColor.white)
-    palette.setColor(palette.ColorRole.Button, QColor(53, 53, 53))
-    palette.setColor(palette.ColorRole.ButtonText, Qt.GlobalColor.white)
-    app.setPalette(palette)
-
-    window = CoordinateTester()
-    window.show()
-    app.exec()
-
-    # Use os._exit() to avoid PyTorch/PySpin DLL conflict on exit
-    os._exit(0)
+    """Main entry point."""
+    try:
+        controller = XArmClickController()
+        controller.monitor_commands()
+    except Exception as e:
+        print(f"\n[ERROR] {e}")
+        import traceback
+        traceback.print_exc()
 
 
 if __name__ == "__main__":
