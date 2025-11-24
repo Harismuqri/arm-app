@@ -297,6 +297,83 @@ Go to [System Configuration - Camera Settings](#updating-camera-settings)
 - Software reinstalled
 - Config values changed (not hardware)
 
+---
+
+### Understanding Calibration Files
+
+The system uses **two calibration files** to transform coordinates from camera pixels to robot positions:
+
+#### 1. homography_auto.pkl
+**Purpose:** Transforms camera pixel coordinates to workspace coordinates (0-300mm space)
+
+**What it does:**
+- Converts what the camera sees (pixels) into real-world measurements (millimeters)
+- Maps the 300mm × 300mm detection area
+- Created by detecting 4 white circles at workspace corners
+
+**How it's created:**
+- **Automatic method:** Place 4 white circles, system detects them and calculates transformation
+- **Manual method:** Enter pixel coordinates and corresponding mm coordinates for 4 corners
+- **File location:** `/home/user/arm-app/homography_auto.pkl`
+
+**Example transformation:**
+```
+Camera sees object at pixel (1024, 768)
+↓ homography_auto.pkl transforms
+Object is at workspace position (150.0, 150.0) mm
+```
+
+#### 2. homography_det_to_robot.pkl
+**Purpose:** Transforms workspace coordinates to actual robot arm coordinates
+
+**What it does:**
+- Converts workspace coordinates (0-300mm) to robot coordinate system
+- Maps workspace corners to robot reach positions
+- Accounts for robot base position and orientation
+
+**How it's created:**
+- Enter workspace corners (0,0 / 300,0 / 300,300 / 0,300)
+- Enter corresponding robot coordinates where arm should reach
+- System calculates transformation matrix
+
+**Default mapping:**
+```
+Workspace Corner  →  Robot Position
+[0, 0]           →  [88.9, 312.0]    (Bottom Left)
+[300, 0]         →  [88.9, 14.7]     (Bottom Right)
+[300, 300]       →  [382.0, 14.7]    (Top Right)
+[0, 300]         →  [382.0, 312.0]   (Top Left)
+```
+
+**File location:** `/home/user/arm-app/homography_det_to_robot.pkl`
+
+**Example transformation:**
+```
+Object at workspace (150.0, 150.0) mm
+↓ homography_det_to_robot.pkl transforms
+Robot should move to (235.45, 163.35) mm
+```
+
+#### Complete Coordinate Flow
+
+```
+Camera Pixel (1024, 768)
+    ↓ [homography_auto.pkl]
+Workspace Coordinate (150.0, 150.0) mm
+    ↓ [homography_det_to_robot.pkl]
+Robot Coordinate (235.45, 163.35) mm
+    ↓ [Robot moves to position]
+Gripper reaches object
+```
+
+**How to use these files:**
+1. Create once during initial setup or after hardware changes
+2. Files are automatically loaded by both GUI and command-line modes
+3. System uses them for all coordinate transformations
+4. Delete and recreate if calibration becomes inaccurate
+
+---
+
 ### Preparation for Calibration
 
 #### Materials Needed:
@@ -380,7 +457,7 @@ The system can be started in **two different modes:**
 - User-friendly graphical interface
 - Built-in calibration wizard
 - Visual feedback and monitoring
-- **INFO ONLY mode** - shows detection data but does NOT control robot
+- Easy calibration file creation
 - Best for: Initial setup, calibration, testing, monitoring
 
 **Option B: Command-Line Mode (Recommended for Production)**
@@ -421,21 +498,38 @@ python3 arm-app-v1.1.py
 
 **Tab 1: Calibration Setup**
 
-1. **Detection Camera Calibration:**
-   - Select "Auto Calibration (Circle Detection)" from dropdown
-   - Ensure 4 white circles (20-30mm) are visible at workspace corners
-   - Click "Calibrate" button
-   - Wait for confirmation message
-   - Calibration file saved: `homography_auto.pkl`
+**Part 1: Create homography_auto.pkl (Camera → Workspace)**
 
-2. **Robot Coordinate Transformation:**
+This file converts camera pixels to workspace millimeters.
+
+1. **Ensure calibration markers are in place:**
+   - Place 4 white circles (20-30mm diameter) at workspace corners
+   - Pattern: Bottom-Left, Bottom-Right, Top-Right, Top-Left
+
+2. **Run automatic calibration:**
+   - Select "Auto Calibration (Circle Detection)" from dropdown
+   - Click "Calibrate" button
+   - System detects circles and calculates transformation
+   - Wait for confirmation: "Auto calibration completed!"
+   - **File created:** `/home/user/arm-app/homography_auto.pkl` ✓
+
+**Part 2: Create homography_det_to_robot.pkl (Workspace → Robot)**
+
+This file converts workspace coordinates to robot arm positions.
+
+1. **Configure transformation:**
    - Leave "Auto Calculation" checkbox enabled
    - Enter only Bottom Left (BL) and Top Right (TR) robot coordinates:
      - **BL:** Workspace (0, 0) → Robot (88.9, 312.0)
      - **TR:** Workspace (300, 300) → Robot (382.0, 14.7)
+
+2. **Calculate transformation:**
    - Click "Calculate" button
    - System auto-calculates BR and TL coordinates
-   - Calibration file saved: `homography_det_to_robot.pkl`
+   - Wait for confirmation: "Robot transformation calculated!"
+   - **File created:** `/home/user/arm-app/homography_det_to_robot.pkl` ✓
+
+**Both calibration files are now ready to use!**
 
 #### Step 3: Start Live Detection
 
@@ -479,9 +573,8 @@ python3 arm-app-v1.1.py
 Click **"STOP System"** button when finished.
 
 **Important Notes:**
-- GUI runs in **INFO ONLY** mode - it does NOT send commands to the robot
-- It shares detection data via shared memory for monitoring
-- Robot controller (xarm-motion-v1.7.py) must be running separately for robot movement
+- GUI is ideal for creating and verifying calibration files
+- Once calibration files are created, they can be used by command-line mode
 - Use this mode for calibration, testing, and verification
 
 ---
