@@ -37,9 +37,10 @@ def load_config(config_path="config.json"):
                 "inspection_camera_index": 1
             },
             "camera_offset": {
-                "offset_x": 92.9,
-                "offset_y": -1.35,
-                "offset_error": 0.4
+                "offset_x": 0.8,
+                "offset_y": 85.3,
+                "offset_error_x": 0.0,
+                "offset_error_y": 0.0
             },
             "window_config": {
                 "detection_width": 960,
@@ -76,11 +77,13 @@ SHOW_CALIBRATION_TIME = 2000
 
 # Camera offset configuration (mm)
 camera_offset_config = CONFIG.get("camera_offset", {})
-CAMERA_OFFSET_X = camera_offset_config.get("offset_x", 92.9)
-CAMERA_OFFSET_Y = camera_offset_config.get("offset_y", -1.35)
-CAMERA_OFFSET_ERROR = camera_offset_config.get("offset_error", 0.4)
+CAMERA_OFFSET_X = camera_offset_config.get("offset_x", 0.8)
+CAMERA_OFFSET_Y = camera_offset_config.get("offset_y", 85.3)
+CAMERA_OFFSET_ERROR_X = camera_offset_config.get("offset_error_x", 0.0)
+CAMERA_OFFSET_ERROR_Y = camera_offset_config.get("offset_error_y", 0.0)
 
-print(f"[Config] Camera offset: ({CAMERA_OFFSET_X:.1f}, {CAMERA_OFFSET_Y:.1f}) ± {CAMERA_OFFSET_ERROR:.1f} mm")
+print(f"[Config] Camera offset: ({CAMERA_OFFSET_X:.1f}, {CAMERA_OFFSET_Y:.1f}) mm")
+print(f"[Config] Camera offset error: (±{CAMERA_OFFSET_ERROR_X:.1f}, ±{CAMERA_OFFSET_ERROR_Y:.1f}) mm")
 
 # Camera indices
 camera_config = CONFIG.get("camera_config", {})
@@ -228,28 +231,29 @@ def draw_info_panel(frame, x, y, info_lines, title="Info"):
 
     return frame
 
-def draw_inspection_crosshair(frame, x, y, offset_error=CAMERA_OFFSET_ERROR):
-    """Draw inspection crosshair with error tolerance circle"""
+def draw_inspection_crosshair(frame, x, y):
+    """Draw inspection crosshair with error tolerance indicator"""
     # Red crosshair
     line_length = 40
     thickness = 3
     color = (0, 0, 255)
-    
+
     cv2.line(frame, (x - line_length, y), (x + line_length, y), color, thickness)
     cv2.line(frame, (x, y - line_length), (x, y + line_length), color, thickness)
-    
+
     # Green center circle
     cv2.circle(frame, (x, y), 10, (0, 255, 0), 2)
-    
-    # Error tolerance circle (yellow, dashed appearance)
-    error_radius_px = 15
-    for angle in range(0, 360, 30):
-        angle_rad = np.radians(angle)
-        x1 = int(x + error_radius_px * np.cos(angle_rad))
-        y1 = int(y + error_radius_px * np.sin(angle_rad))
-        x2 = int(x + error_radius_px * np.cos(angle_rad + np.radians(15)))
-        y2 = int(y + error_radius_px * np.sin(angle_rad + np.radians(15)))
-        cv2.line(frame, (x1, y1), (x2, y2), (0, 255, 255), 1)
+
+    # Error tolerance indicator (yellow, dashed circle if errors > 0)
+    if CAMERA_OFFSET_ERROR_X > 0 or CAMERA_OFFSET_ERROR_Y > 0:
+        error_radius_px = 15
+        for angle in range(0, 360, 30):
+            angle_rad = np.radians(angle)
+            x1 = int(x + error_radius_px * np.cos(angle_rad))
+            y1 = int(y + error_radius_px * np.sin(angle_rad))
+            x2 = int(x + error_radius_px * np.cos(angle_rad + np.radians(15)))
+            y2 = int(y + error_radius_px * np.sin(angle_rad + np.radians(15)))
+            cv2.line(frame, (x1, y1), (x2, y2), (0, 255, 255), 1)
 
 class DetectionDataManager:
     """Manages shared memory for detection data."""
@@ -475,7 +479,7 @@ class InspectDataManager:
             try:
                 self.shm = shared_memory.SharedMemory(name=self.name, create=True, size=self.size)
                 print(f"[INFO] Created inspect data shared memory: {self.name}")
-                self._write_data({"inspect": False, "target_x": 0, "target_y": 0, "angle": 0.0, "offset_x": CAMERA_OFFSET_X, "offset_y": CAMERA_OFFSET_Y, "timestamp": 0, "processed": True})
+                self._write_data({"inspect": False, "target_x": 0, "target_y": 0, "angle": 0.0, "offset_x": CAMERA_OFFSET_X, "offset_y": CAMERA_OFFSET_Y, "offset_error_x": CAMERA_OFFSET_ERROR_X, "offset_error_y": CAMERA_OFFSET_ERROR_Y, "timestamp": 0, "processed": True})
             except Exception as e:
                 print(f"[ERROR] Failed to create inspect shared memory: {e}")
                 raise
@@ -507,13 +511,15 @@ class InspectDataManager:
             "height": float(height),
             "offset_x": CAMERA_OFFSET_X,
             "offset_y": CAMERA_OFFSET_Y,
-            "offset_error": CAMERA_OFFSET_ERROR,
+            "offset_error_x": CAMERA_OFFSET_ERROR_X,
+            "offset_error_y": CAMERA_OFFSET_ERROR_Y,
             "timestamp": time.time(),
             "processed": False
         }
         self._write_data(data)
         print(f"[INSPECT] Inspection command sent: Target ({target_x:.1f}, {target_y:.1f}) mm - Angle: {angle:.1f}°")
-        print(f"[INSPECT] Camera offset: ({CAMERA_OFFSET_X:.1f}, {CAMERA_OFFSET_Y:.1f}) ± {CAMERA_OFFSET_ERROR:.1f} mm")
+        print(f"[INSPECT] Camera offset: ({CAMERA_OFFSET_X:.1f}, {CAMERA_OFFSET_Y:.1f}) mm")
+        print(f"[INSPECT] Camera offset error: (±{CAMERA_OFFSET_ERROR_X:.1f}, ±{CAMERA_OFFSET_ERROR_Y:.1f}) mm")
 
     def cleanup(self):
         """Close and unlink shared memory."""
@@ -780,7 +786,8 @@ def main():
     print("\nInspection mode:")
     print("• Click on object, then press 'T': Inspect selected object")
     print("• Press 'Q': Quit")
-    print(f"\nCamera offset: ({CAMERA_OFFSET_X:.1f}, {CAMERA_OFFSET_Y:.1f}) ± {CAMERA_OFFSET_ERROR:.1f} mm")
+    print(f"\nCamera offset: ({CAMERA_OFFSET_X:.1f}, {CAMERA_OFFSET_Y:.1f}) mm")
+    print(f"Camera offset error: (±{CAMERA_OFFSET_ERROR_X:.1f}, ±{CAMERA_OFFSET_ERROR_Y:.1f}) mm")
     print("="*60 + "\n")
 
     try:
@@ -1060,9 +1067,9 @@ def main():
                 info_lines = [
                     "INSPECTION CAMERA",
                     f"Offset: ({CAMERA_OFFSET_X:.1f}, {CAMERA_OFFSET_Y:.1f}) mm",
-                    f"Error: {CAMERA_OFFSET_ERROR:.1f} mm"
+                    f"Error: (±{CAMERA_OFFSET_ERROR_X:.1f}, ±{CAMERA_OFFSET_ERROR_Y:.1f}) mm"
                 ]
-                
+
                 y_offset = 50
                 for line in info_lines:
                     cv2.putText(frame_inspect, line, (25, y_offset), font, 1.0, (0, 255, 255), 2, cv2.LINE_AA)
