@@ -1,7 +1,6 @@
 """
-Coordinate Testing Tool with Robot Control
-GUI application for testing xArm coordinates and inspection positioning
-Works with xarm-motion-no-wait.py for robot control
+Coordinate Testing Tool
+Allows manual input of X,Y coordinates to visualize position and send gripper to location
 """
 
 # Standard library imports
@@ -76,6 +75,80 @@ class ClickableLabel(QLabel):
             else:
                 # No scaling info, emit raw coordinates
                 self.clicked.emit(widget_x, widget_y)
+
+
+class ClickDataManager:
+    """Manages shared memory for sending move coordinates to robot"""
+
+    def __init__(self, name="ClickData", size=512):
+        self.name = name
+        self.size = size
+        self.shm = None
+        self._initialize_shared_memory()
+
+    def _initialize_shared_memory(self):
+        """Create or attach to existing shared memory."""
+        try:
+            self.shm = shared_memory.SharedMemory(name=self.name, create=False)
+            self._read_data()
+        except FileNotFoundError:
+            try:
+                self.shm = shared_memory.SharedMemory(name=self.name, create=True, size=self.size)
+                self._write_data({"click_x": 0, "click_y": 0, "timestamp": 0, "processed": True, "button": "none", "angle": 0.0})
+            except Exception as e:
+                print(f"[ERROR] Failed to create shared memory: {e}")
+                raise
+
+    def _write_data(self, data):
+        """Write data to shared memory as JSON."""
+        try:
+            json_str = json.dumps(data)
+            json_bytes = json_str.encode('utf-8')
+
+            if len(json_bytes) > self.size - 4:
+                print(f"[ERROR] Data too large: {len(json_bytes)} > {self.size-4}")
+                return False
+
+            self.shm.buf[:4] = struct.pack('I', len(json_bytes))
+            self.shm.buf[4:4+len(json_bytes)] = json_bytes
+            return True
+        except Exception as e:
+            print(f"[ERROR] Failed to write click data: {e}")
+            return False
+
+    def _read_data(self):
+        """Read data from shared memory."""
+        try:
+            length = struct.unpack('I', bytes(self.shm.buf[:4]))[0]
+            if length == 0 or length > self.size - 4:
+                return {"click_x": 0, "click_y": 0, "timestamp": 0, "processed": True, "button": "none", "angle": 0.0}
+
+            json_bytes = bytes(self.shm.buf[4:4+length])
+            json_str = json_bytes.decode('utf-8')
+            return json.loads(json_str)
+        except Exception as e:
+            print(f"[ERROR] Failed to read click data: {e}")
+            return None
+
+    def send_coordinate(self, x_mm, y_mm, angle=0.0):
+        """Send coordinate to robot via shared memory"""
+        data = {
+            "click_x": float(x_mm),
+            "click_y": float(y_mm),
+            "timestamp": time.time(),
+            "processed": False,
+            "button": "left",
+            "angle": float(angle)
+        }
+        return self._write_data(data)
+
+    def cleanup(self):
+        """Clean up shared memory."""
+        if self.shm:
+            try:
+                self.shm.close()
+            except:
+                pass
 
 
 class InspectDataManager:
@@ -201,11 +274,11 @@ class InspectDataManager:
 
 
 class CoordinateTester(QMainWindow):
-    """GUI tool for testing xArm coordinates and inspection positioning"""
+    """Simple tool to test coordinates by showing dots on camera"""
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("xArm Coordinate Testing Tool - Use with xarm-motion-no-wait.py")
+        self.setWindowTitle("Coordinate Testing Tool with Robot Control")
         self.setGeometry(100, 100, 1400, 800)
 
         # Load configuration
@@ -238,10 +311,9 @@ class CoordinateTester(QMainWindow):
         self.inspect_data_mgr = None
         try:
             self.inspect_data_mgr = InspectDataManager(name="InspectData", size=512)
-            print("[INFO] ✅ Connected to robot control (shared memory: InspectData)")
+            print("[INFO] Connected to robot inspection control shared memory")
         except Exception as e:
-            print(f"[WARNING] ⚠️  Could not connect to robot control: {e}")
-            print(f"[WARNING] Make sure xarm-motion-no-wait.py is running!")
+            print(f"[WARNING] Could not connect to robot inspection control: {e}")
 
         self.init_ui()
         self.load_calibration()
@@ -272,7 +344,7 @@ class CoordinateTester(QMainWindow):
         self.model.overrides['verbose'] = False
 
     def get_angle(self, obb_pts):
-        """Calculate angle from OBB points"""
+        """Calculate angle from OBB points (same as arm-app-v1.1.py)"""
         v1 = obb_pts[1] - obb_pts[0]
         v2 = obb_pts[2] - obb_pts[1]
         len1 = np.linalg.norm(v1)
@@ -285,7 +357,7 @@ class CoordinateTester(QMainWindow):
         return angle_deg
 
     def point_in_polygon(self, point, polygon):
-        """Check if point is inside polygon"""
+        """Check if point is inside polygon using cv2.pointPolygonTest"""
         return cv2.pointPolygonTest(polygon.astype(np.float32), point, False) >= 0
 
     def transform_points(self, points, matrix):
@@ -305,6 +377,7 @@ class CoordinateTester(QMainWindow):
 
     def load_calibration(self):
         """Load calibration matrix from homography_auto.pkl"""
+        # Get script directory to find calibration file
         script_dir = os.path.dirname(os.path.abspath(__file__))
         calib_file = os.path.join(script_dir, "homography_auto.pkl")
 
@@ -314,14 +387,13 @@ class CoordinateTester(QMainWindow):
                     self.H_camera_to_workspace = pickle.load(f)
                     # Calculate inverse matrix for camera display
                     self.H_workspace_to_camera = np.linalg.inv(self.H_camera_to_workspace)
-                self.status_label.setText("Status: ✅ Calibration loaded | Robot: " +
-                                        ("✅ Connected" if self.inspect_data_mgr else "⚠️  Not connected"))
-                print(f"[INFO] ✅ Loaded calibration: {calib_file}")
+                self.status_label.setText("Status: Calibration loaded ✓")
+                print(f"[INFO] Loaded calibration: {calib_file}")
             except Exception as e:
-                self.status_label.setText(f"Status: ❌ Calibration error - {str(e)[:30]}...")
+                self.status_label.setText(f"Status: Error loading calibration - {str(e)[:30]}...")
                 print(f"[ERROR] Failed to load calibration: {e}")
         else:
-            self.status_label.setText(f"Status: ⚠️  No calibration file found")
+            self.status_label.setText(f"Status: No calibration found")
             print(f"[WARNING] Calibration file not found: {calib_file}")
 
     def init_ui(self):
@@ -331,20 +403,14 @@ class CoordinateTester(QMainWindow):
         layout = QVBoxLayout(central_widget)
 
         # Title
-        title = QLabel("🎯 xArm Coordinate Testing Tool")
+        title = QLabel("Coordinate Testing Tool")
         title.setFont(QFont("Arial", 16, QFont.Weight.Bold))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
 
-        subtitle = QLabel("⚡ Use with: xarm-motion-no-wait.py | Click objects or enter coordinates manually")
-        subtitle.setFont(QFont("Arial", 9))
-        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        subtitle.setStyleSheet("color: #888;")
-        layout.addWidget(subtitle)
-
         # Input group
-        input_group = QGroupBox("📍 Coordinate Input (Workspace mm)")
-        input_main_layout = QHBoxLayout()
+        input_group = QGroupBox("Coordinate Input (Workspace mm)")
+        input_main_layout = QHBoxLayout()  # Horizontal layout for inputs and buttons
 
         # Left side: Input fields
         input_layout = QGridLayout()
@@ -365,68 +431,68 @@ class CoordinateTester(QMainWindow):
         input_layout.addWidget(QLabel("Angle (°):"), 2, 0)
         self.angle_input = QLineEdit()
         self.angle_input.setPlaceholderText("Enter angle (0-180)")
-        self.angle_input.setText("0")
-        self.angle_input.textChanged.connect(self.on_angle_changed)
+        self.angle_input.setText("0")  # Default to 0 degrees
+        self.angle_input.textChanged.connect(self.on_angle_changed)  # Update display when angle changes
         input_layout.addWidget(self.angle_input, 2, 1)
 
         # Camera offset X input
         input_layout.addWidget(QLabel("Offset X (mm):"), 3, 0)
         self.offset_x_input = QLineEdit()
         self.offset_x_input.setPlaceholderText("Camera offset X")
-        self.offset_x_input.setText("0.8")
+        self.offset_x_input.setText("0.8")  # Calibrated offset
         input_layout.addWidget(self.offset_x_input, 3, 1)
 
         # Camera offset Y input
         input_layout.addWidget(QLabel("Offset Y (mm):"), 4, 0)
         self.offset_y_input = QLineEdit()
         self.offset_y_input.setPlaceholderText("Camera offset Y")
-        self.offset_y_input.setText("85.3")
+        self.offset_y_input.setText("85.3")  # Calibrated offset
         input_layout.addWidget(self.offset_y_input, 4, 1)
 
         # Camera offset error X input
-        input_layout.addWidget(QLabel("Error X (mm):"), 5, 0)
+        input_layout.addWidget(QLabel("Offset Error X (mm):"), 5, 0)
         self.offset_error_x_input = QLineEdit()
         self.offset_error_x_input.setPlaceholderText("Error X")
-        self.offset_error_x_input.setText("0")
+        self.offset_error_x_input.setText("0")  # Default offset error X
         input_layout.addWidget(self.offset_error_x_input, 5, 1)
 
         # Camera offset error Y input
-        input_layout.addWidget(QLabel("Error Y (mm):"), 6, 0)
+        input_layout.addWidget(QLabel("Offset Error Y (mm):"), 6, 0)
         self.offset_error_y_input = QLineEdit()
         self.offset_error_y_input.setPlaceholderText("Error Y")
-        self.offset_error_y_input.setText("0")
+        self.offset_error_y_input.setText("0")  # Default offset error Y
         input_layout.addWidget(self.offset_error_y_input, 6, 1)
 
         input_main_layout.addLayout(input_layout)
 
-        # Right side: Buttons
+        # Right side: Buttons (vertical stack)
         btn_layout = QVBoxLayout()
 
-        self.add_btn = QPushButton("📌 Add Point")
+        self.add_btn = QPushButton("Add Point")
         self.add_btn.clicked.connect(self.add_point)
         self.add_btn.setMinimumSize(140, 45)
         self.add_btn.setFont(QFont("Arial", 11))
         btn_layout.addWidget(self.add_btn)
 
-        self.send_robot_btn = QPushButton("🔍 Inspect Target")
+        self.send_robot_btn = QPushButton("Inspect Target")
         self.send_robot_btn.clicked.connect(self.send_to_robot)
         self.send_robot_btn.setStyleSheet("background-color: #FF9800; color: white; font-weight: bold; font-size: 11pt;")
         self.send_robot_btn.setMinimumSize(140, 45)
         btn_layout.addWidget(self.send_robot_btn)
 
-        self.home_btn = QPushButton("🏠 Home")
+        self.home_btn = QPushButton("Home")
         self.home_btn.clicked.connect(self.send_home)
         self.home_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold; font-size: 11pt;")
         self.home_btn.setMinimumSize(140, 45)
         btn_layout.addWidget(self.home_btn)
 
-        self.clear_btn = QPushButton("🗑️ Clear All")
+        self.clear_btn = QPushButton("Clear All")
         self.clear_btn.clicked.connect(self.clear_points)
         self.clear_btn.setMinimumSize(140, 45)
         self.clear_btn.setFont(QFont("Arial", 11))
         btn_layout.addWidget(self.clear_btn)
 
-        btn_layout.addStretch()
+        btn_layout.addStretch()  # Push buttons to top
 
         input_main_layout.addLayout(btn_layout)
 
@@ -442,40 +508,40 @@ class CoordinateTester(QMainWindow):
         cameras_layout = QHBoxLayout()
 
         # Detection camera view
-        det_group = QGroupBox("📷 Detection Camera (Workspace View) - Click to select")
+        det_group = QGroupBox("Detection Camera (Workspace View)")
         det_layout = QVBoxLayout()
-        self.detection_label = ClickableLabel()
-        self.detection_label.setMinimumSize(400, 300)
+        self.detection_label = ClickableLabel()  # Use ClickableLabel for click detection
+        self.detection_label.setMinimumSize(400, 300)  # Smaller minimum for flexibility
         self.detection_label.setSizePolicy(
             QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         )
         self.detection_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.detection_label.setStyleSheet("border: 2px solid #555; background-color: #2a2a2a;")
-        self.detection_label.clicked.connect(self.on_detection_click)
-        self.detection_label.setScaledContents(False)
+        self.detection_label.clicked.connect(self.on_detection_click)  # Connect click signal
+        self.detection_label.setScaledContents(False)  # Keep aspect ratio
         det_layout.addWidget(self.detection_label)
         det_group.setLayout(det_layout)
-        cameras_layout.addWidget(det_group, 1)
+        cameras_layout.addWidget(det_group, 1)  # Stretch factor 1
 
         # Inspection camera view
-        insp_group = QGroupBox("🔬 Inspection Camera (Gripper View)")
+        insp_group = QGroupBox("Inspection Camera (Gripper View)")
         insp_layout = QVBoxLayout()
         self.inspection_label = QLabel()
-        self.inspection_label.setMinimumSize(400, 300)
+        self.inspection_label.setMinimumSize(400, 300)  # Smaller minimum for flexibility
         self.inspection_label.setSizePolicy(
             QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         )
         self.inspection_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.inspection_label.setStyleSheet("border: 2px solid #555; background-color: #2a2a2a;")
-        self.inspection_label.setScaledContents(False)
+        self.inspection_label.setScaledContents(False)  # Keep aspect ratio
         insp_layout.addWidget(self.inspection_label)
         insp_group.setLayout(insp_layout)
-        cameras_layout.addWidget(insp_group, 1)
+        cameras_layout.addWidget(insp_group, 1)  # Stretch factor 1
 
-        layout.addLayout(cameras_layout, 1)
+        layout.addLayout(cameras_layout, 1)  # Add stretch factor to make cameras expand
 
         # Info label
-        self.info_label = QLabel("💡 Click on detected objects or enter coordinates manually")
+        self.info_label = QLabel("Enter coordinates and angle (0-180°) then click 'Inspect Target' to position inspection camera")
         self.info_label.setFont(QFont("Arial", 9))
         self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.info_label)
@@ -487,49 +553,54 @@ class CoordinateTester(QMainWindow):
             cam_list = self.system.GetCameras()
 
             if cam_list.GetSize() >= 1:
+                # Get first camera (detection camera)
                 self.detection_camera = cam_list.GetByIndex(0)
                 self.detection_camera.Init()
                 self.detection_camera.AcquisitionMode.SetValue(PySpin.AcquisitionMode_Continuous)
                 self.detection_camera.BeginAcquisition()
-                print("[INFO] ✅ Detection camera initialized")
+                print("[INFO] Detection camera initialized")
 
             if cam_list.GetSize() >= 2:
+                # Get second camera (inspection camera)
                 self.inspection_camera = cam_list.GetByIndex(1)
                 self.inspection_camera.Init()
                 self.inspection_camera.AcquisitionMode.SetValue(PySpin.AcquisitionMode_Continuous)
                 self.inspection_camera.BeginAcquisition()
-                print("[INFO] ✅ Inspection camera initialized")
-                self.status_label.setText("Status: ✅ Both cameras connected | Robot: " +
-                                        ("✅ Connected" if self.inspect_data_mgr else "⚠️  Not connected"))
+                print("[INFO] Inspection camera initialized")
+                self.status_label.setText("Status: Both cameras connected ✓")
             elif cam_list.GetSize() == 1:
-                self.status_label.setText("Status: ⚠️  Only detection camera found | Robot: " +
-                                        ("✅ Connected" if self.inspect_data_mgr else "⚠️  Not connected"))
+                self.status_label.setText("Status: Detection camera connected (inspection camera not found)")
             else:
-                self.status_label.setText("Status: ❌ No cameras detected")
+                self.status_label.setText("Status: No cameras detected")
                 print("[WARNING] No cameras found")
                 self.show_no_camera_message()
         except Exception as e:
             error_msg = str(e)
-            self.status_label.setText(f"Status: ❌ Camera error - {error_msg[:40]}...")
+            self.status_label.setText(f"Status: Camera error - {error_msg[:50]}...")
             print(f"[ERROR] Camera initialization failed: {error_msg}")
 
+            # Check if camera is in use
             if "in use" in error_msg.lower() or "already" in error_msg.lower():
-                self.info_label.setText("⚠️  Camera in use by another app. Close other apps and restart.")
+                self.info_label.setText("⚠ Camera is in use by another application. Close other apps and restart.")
 
             self.show_no_camera_message()
 
     def show_no_camera_message(self):
         """Show message when camera is not available"""
+        # Create a placeholder image
         placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
-        cv2.putText(placeholder, "No Camera Feed", (180, 220),
+        cv2.putText(placeholder, "No Camera Feed Available", (120, 220),
                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-        cv2.putText(placeholder, "1. Check camera connection", (150, 280),
+        cv2.putText(placeholder, "Make sure:", (200, 280),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 1)
+        cv2.putText(placeholder, "1. Camera is connected", (180, 310),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
-        cv2.putText(placeholder, "2. Close other camera apps", (150, 310),
+        cv2.putText(placeholder, "2. No other app is using camera", (180, 340),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
-        cv2.putText(placeholder, "3. Restart this tool", (150, 340),
+        cv2.putText(placeholder, "3. Restart this tool", (180, 370),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
 
+        # Display placeholder on both labels
         h, w, ch = placeholder.shape
         bytes_per_line = ch * w
         qt_image = QImage(placeholder.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
@@ -543,43 +614,68 @@ class CoordinateTester(QMainWindow):
             x_mm = float(self.x_input.text())
             y_mm = float(self.y_input.text())
 
+            # Validate coordinates
             workspace_width = self.config.get("workspace", {}).get("width", 300)
             workspace_height = self.config.get("workspace", {}).get("height", 300)
 
             if not (0 <= x_mm <= workspace_width and 0 <= y_mm <= workspace_height):
-                self.info_label.setText(f"⚠️  Warning: Point ({x_mm}, {y_mm}) outside workspace")
+                self.info_label.setText(f"⚠ Warning: Point ({x_mm}, {y_mm}) is outside workspace bounds")
 
+            # Add to list
             self.test_points.append((x_mm, y_mm))
-            self.info_label.setText(f"✅ Added point: ({x_mm:.1f}, {y_mm:.1f}) mm - Total: {len(self.test_points)}")
+            self.info_label.setText(f"✓ Added point: ({x_mm:.1f}, {y_mm:.1f}) mm - Total points: {len(self.test_points)}")
 
+            # Clear inputs
             self.x_input.clear()
             self.y_input.clear()
             self.x_input.setFocus()
 
         except ValueError:
-            self.info_label.setText("❌ Error: Please enter valid numbers for X and Y")
+            self.info_label.setText("✗ Error: Please enter valid numbers for X and Y")
 
     def clear_points(self):
         """Clear all test points"""
         self.test_points.clear()
-        self.info_label.setText("🗑️  All points cleared")
+        self.info_label.setText("All points cleared")
 
     def get_error_offset_for_angle(self, angle):
-        """Calculate error offset based on angle range (for fine-tuning)"""
+        """
+        Calculate error offset based on angle range.
+        Adjust the values in each range to calibrate for different angles.
+
+        Returns: (error_x, error_y) tuple
+        """
+        # Normalize angle to 0-180° range
         angle_norm = angle % 180
 
+        # Apply error offset based on angle range
+        # TODO: Adjust these values when you find perfect error offset values
         if 0 <= angle_norm < 50:
-            return 0.0, 0.0
+            # Angle 0-49°: Base position, no error correction needed
+            error_x = 0.0
+            error_y = 0.0
         elif 50 <= angle_norm < 80:
-            return 0.0, 0.0
+            # Angle 50-79°: Adjust these values based on testing
+            error_x = 0.0
+            error_y = 0.0
         elif 80 <= angle_norm < 90:
-            return -2.0, -0.5
+            # Angle 80-89°: Adjust these values based on testing
+            error_x = -2.0
+            error_y = -0.5
         elif 90 <= angle_norm < 135:
-            return -2.0, -0.5
+            # Angle 90-134°: Adjust these values based on testing
+            error_x = -2.0
+            error_y = -0.5
         elif 135 <= angle_norm < 150:
-            return 0.0, 0.0
-        else:
-            return 0.0, 0.0
+            # Angle 135-149°: Adjust these values based on testing
+            error_x = 0.0
+            error_y = 0.0
+        else:  # 150-180°
+            # Angle 150-180°: Adjust these values based on testing
+            error_x = 0.0
+            error_y = 0.0
+
+        return error_x, error_y
 
     def send_to_robot(self):
         """Send inspection command to robot via shared memory"""
@@ -590,54 +686,60 @@ class CoordinateTester(QMainWindow):
             offset_x = float(self.offset_x_input.text()) if self.offset_x_input.text() else 0.8
             offset_y = float(self.offset_y_input.text()) if self.offset_y_input.text() else 85.3
 
-            # Get angle-based error offset
+            # Get angle-based error offset (automatically calculated)
             auto_error_x, auto_error_y = self.get_error_offset_for_angle(angle)
 
-            # Use manual input if provided, otherwise use auto-calculated
+            # You can still override with manual input if needed
+            # If the input fields have non-zero values, they will override the automatic values
             manual_error_x = float(self.offset_error_x_input.text()) if self.offset_error_x_input.text() else auto_error_x
             manual_error_y = float(self.offset_error_y_input.text()) if self.offset_error_y_input.text() else auto_error_y
 
+            # Use manual values if they differ from 0, otherwise use automatic values
             offset_error_x = manual_error_x if self.offset_error_x_input.text() and manual_error_x != 0.0 else auto_error_x
             offset_error_y = manual_error_y if self.offset_error_y_input.text() and manual_error_y != 0.0 else auto_error_y
 
             if self.inspect_data_mgr is None:
-                self.info_label.setText("❌ Robot not connected - Start xarm-motion-no-wait.py first!")
+                self.info_label.setText("✗ Error: Robot inspection control not connected")
                 return
 
+            # Send inspection command to robot with custom offset values
+            # Robot will position gripper so inspection camera views the target at (x_mm, y_mm)
+            # at inspection_height (103.4mm from config.json)
             if self.inspect_data_mgr.send_inspect_command(x_mm, y_mm, angle=angle, width=0.0, height=0.0,
-                                                          offset_x=offset_x, offset_y=offset_y,
-                                                          offset_error_x=offset_error_x, offset_error_y=offset_error_y):
-                self.info_label.setText(f"✅ Inspection sent: ({x_mm:.1f}, {y_mm:.1f}) mm @ {angle:.1f}°")
-                print(f"[INFO] Sent inspection: Target({x_mm:.1f}, {y_mm:.1f}), Angle:{angle:.1f}°, Offset:({offset_x:.1f}, {offset_y:.1f}), Error:({offset_error_x:.1f}, {offset_error_y:.1f})")
+                                                          offset_x=offset_x, offset_y=offset_y, offset_error_x=offset_error_x, offset_error_y=offset_error_y):
+                self.info_label.setText(f"✓ Inspection sent: Target ({x_mm:.1f}, {y_mm:.1f}) mm, Angle: {angle:.1f}°, Offset: ({offset_x:.1f}, {offset_y:.1f}), Error: ({offset_error_x:.1f}, {offset_error_y:.1f})")
+                print(f"[INFO] Sent inspection command: Target ({x_mm:.1f}, {y_mm:.1f}) mm, Angle: {angle:.1f}°, Offset: ({offset_x:.1f}, {offset_y:.1f}), Error: ({offset_error_x:.1f}, {offset_error_y:.1f}) [Auto-calculated from angle]")
             else:
-                self.info_label.setText("❌ Failed to send inspection command")
+                self.info_label.setText("✗ Error: Failed to send inspection command")
 
         except ValueError:
-            self.info_label.setText("❌ Error: Please enter valid numbers")
+            self.info_label.setText("✗ Error: Please enter valid numbers for X, Y, Angle, and Offsets")
 
     def send_home(self):
-        """Send home command to robot"""
+        """Send home command to robot via shared memory"""
         try:
             if self.inspect_data_mgr is None:
-                self.info_label.setText("❌ Robot not connected - Start xarm-motion-no-wait.py first!")
+                self.info_label.setText("✗ Error: Robot inspection control not connected")
                 return
 
+            # Send home command to robot
             if self.inspect_data_mgr.send_home_command():
-                self.info_label.setText("✅ Home command sent - Robot moving to home position")
-                print(f"[INFO] Sent home command")
-                self.status_label.setText("Status: 🏠 Robot moving to home...")
+                self.info_label.setText("✓ Home command sent - Robot moving to home position")
+                print(f"[INFO] Sent home command to robot")
+                self.status_label.setText("Status: Robot moving to home position...")
             else:
-                self.info_label.setText("❌ Failed to send home command")
+                self.info_label.setText("✗ Error: Failed to send home command")
 
         except Exception as e:
-            self.info_label.setText(f"❌ Error: {str(e)}")
+            self.info_label.setText(f"✗ Error: {str(e)}")
 
     def on_detection_click(self, x, y):
-        """Handle click on detection camera"""
+        """Handle click on detection camera - show info panel with coordinates and auto-fill angle if clicked on object"""
         self.mouse_click_x = x
         self.mouse_click_y = y
         self.show_info_panel = True
 
+        # Convert click position to workspace coordinates
         if self.H_camera_to_workspace is not None:
             click_pt = np.array([[x, y]], dtype=np.float32).reshape(-1, 1, 2)
             workspace_coord = cv2.perspectiveTransform(click_pt, self.H_camera_to_workspace).reshape(-1, 2)
@@ -645,33 +747,36 @@ class CoordinateTester(QMainWindow):
             click_y_mm = workspace_coord[0][1]
             self.clicked_workspace_pos = (click_x_mm, click_y_mm)
 
-            # Auto-fill coordinates
+            # Auto-fill coordinates in input fields (use actual click position)
             self.x_input.setText(f"{click_x_mm:.1f}")
             self.y_input.setText(f"{click_y_mm:.1f}")
 
-            # Check if clicked on detected object
+            # Check if clicked on any detected object to auto-fill angle
             clicked_on_object = False
             for obj_data in self.detected_objects:
                 if self.point_in_polygon((x, y), obj_data['corners']):
                     clicked_on_object = True
+                    # Auto-fill angle from detected object (coordinates already set to click position)
                     self.angle_input.setText(f"{obj_data['angle']:.0f}")
-                    self.status_label.setText(f"Status: 🎯 Clicked object #{obj_data['id']} @ ({click_x_mm:.1f}, {click_y_mm:.1f}) mm, {obj_data['angle']:.1f}°")
+                    self.status_label.setText(f"Status: Clicked at ({click_x_mm:.1f}, {click_y_mm:.1f}) mm - Object {obj_data['id']}, Angle: {obj_data['angle']:.1f}° ✓")
                     break
 
+            # If not clicked on object, just show click coordinates
             if not clicked_on_object:
+                # Check if inside workspace
                 workspace_width = self.config.get("workspace", {}).get("width", 300)
                 workspace_height = self.config.get("workspace", {}).get("height", 300)
 
                 if 0 <= click_x_mm <= workspace_width and 0 <= click_y_mm <= workspace_height:
-                    self.status_label.setText(f"Status: ✅ Clicked @ ({click_x_mm:.1f}, {click_y_mm:.1f}) mm")
+                    self.status_label.setText(f"Status: Clicked at ({click_x_mm:.1f}, {click_y_mm:.1f}) mm - In workspace ✓")
                 else:
-                    self.status_label.setText(f"Status: ⚠️  Clicked @ ({click_x_mm:.1f}, {click_y_mm:.1f}) mm - Outside workspace")
+                    self.status_label.setText(f"Status: Clicked at ({click_x_mm:.1f}, {click_y_mm:.1f}) mm - Outside workspace")
         else:
             self.clicked_workspace_pos = None
-            self.status_label.setText(f"Status: Clicked @ pixel ({x}, {y}) - No calibration")
+            self.status_label.setText(f"Status: Clicked at pixel ({x}, {y}) - No calibration")
 
     def on_angle_changed(self):
-        """Called when angle input changes"""
+        """Called when angle input changes - no action needed, display updates automatically"""
         pass
 
     def draw_info_panel_on_frame(self, frame, x, y, info_lines, title="Info"):
@@ -701,8 +806,10 @@ class CoordinateTester(QMainWindow):
         cv2.rectangle(overlay, (x, y), (x + panel_width, y + panel_height), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
 
-        # Draw border and title
+        # Draw border
         cv2.rectangle(frame, (x, y), (x + panel_width, y + panel_height), (0, 255, 255), 2)
+
+        # Draw title
         cv2.rectangle(frame, (x, y), (x + panel_width, y + 25), (0, 255, 255), -1)
         cv2.putText(frame, title, (x + padding, y + 18), font, 0.6, (0, 0, 0), 2, cv2.LINE_AA)
 
@@ -716,10 +823,11 @@ class CoordinateTester(QMainWindow):
 
     def update_cameras(self):
         """Update both camera displays"""
-        # Initialize cameras on first update
+        # Initialize cameras on first update (lazy initialization to avoid DLL conflicts)
         if self.detection_camera is None:
             self.init_cameras()
             if self.detection_camera is None:
+                # Failed to initialize, try again next time
                 return
 
         # Update detection camera
@@ -727,10 +835,12 @@ class CoordinateTester(QMainWindow):
             try:
                 image_result = self.detection_camera.GetNextImage(1000)
                 if not image_result.IsIncomplete():
+                    # Convert to OpenCV format
                     width = image_result.GetWidth()
                     height = image_result.GetHeight()
                     image_data = image_result.GetNDArray()
 
+                    # Handle different pixel formats
                     if len(image_data.shape) == 2:
                         frame = cv2.cvtColor(image_data, cv2.COLOR_GRAY2BGR)
                     elif len(image_data.shape) == 3:
@@ -741,8 +851,8 @@ class CoordinateTester(QMainWindow):
 
                     image_result.Release()
 
-                    # Run YOLO detection
-                    self.detected_objects = []
+                    # Run YOLO detection if model is loaded
+                    self.detected_objects = []  # Clear previous detections
                     if self.model is not None:
                         try:
                             results = self.model(frame, conf=self.config.get("detection_confidence", 0.7))
@@ -757,11 +867,13 @@ class CoordinateTester(QMainWindow):
                                     else:
                                         continue
 
+                                    # Transform corners to workspace coordinates
                                     if self.H_camera_to_workspace is not None:
                                         transformed = self.transform_points(corners, self.H_camera_to_workspace)
                                         is_inside = self.is_inside_workspace(transformed)
 
                                         if is_inside:
+                                            # Calculate object properties in workspace coordinates
                                             center = np.mean(transformed, axis=0)
                                             angle = self.get_angle(transformed)
 
@@ -773,6 +885,7 @@ class CoordinateTester(QMainWindow):
                                             x_mm, y_mm = round(center[0], 1), round(center[1], 1)
                                             angle_deg = round(angle, 1)
 
+                                            # Store object data
                                             self.detected_objects.append({
                                                 'id': i,
                                                 'corners': corners.astype(int),
@@ -783,7 +896,7 @@ class CoordinateTester(QMainWindow):
                                                 'height': height_mm
                                             })
 
-                                            # Draw bounding box
+                                            # Draw bounding box (green for inside workspace)
                                             corners_int = corners.astype(int)
                                             cv2.polylines(frame, [corners_int], isClosed=True, color=(0, 255, 0), thickness=2)
 
@@ -792,13 +905,13 @@ class CoordinateTester(QMainWindow):
                                             cv2.circle(frame, tuple(center_img), 5, (0, 0, 255), -1)
                                             cv2.circle(frame, tuple(center_img), 5, (255, 255, 255), 1)
 
-                                            # Draw label
+                                            # Draw object label with angle
                                             label_pos = tuple(corners_int[0] - [0, 10])
-                                            label_text = f"#{i}: {angle_deg:.0f}°"
+                                            label_text = f"Obj {i}: {angle_deg:.0f}"
                                             cv2.putText(frame, label_text, label_pos,
                                                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
                         except Exception as e:
-                            pass
+                            print(f"[DEBUG] YOLO detection error: {e}")
 
                     # Draw test points
                     if self.H_workspace_to_camera is not None:
@@ -811,7 +924,7 @@ class CoordinateTester(QMainWindow):
 
                             if 0 <= px < width and 0 <= py < height:
                                 cv2.circle(frame, (px, py), 3, (0, 0, 255), -1, cv2.LINE_AA)
-                                workspace_label = f"({x_mm:.1f}, {y_mm:.1f})"
+                                workspace_label = f"({x_mm:.1f}, {y_mm:.1f}) mm"
                                 label_x = px + 10
                                 label_y = py - 10
                                 (w, h), _ = cv2.getTextSize(workspace_label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
@@ -831,32 +944,45 @@ class CoordinateTester(QMainWindow):
                         camera_corners = camera_corners.astype(np.int32)
                         cv2.polylines(frame, [camera_corners], isClosed=True, color=(0, 255, 255), thickness=2)
 
-                        # Draw angle indicator
+                        # Draw angle indicator at current input position
                         try:
                             if self.x_input.text() and self.y_input.text() and self.angle_input.text():
                                 target_x_mm = float(self.x_input.text())
                                 target_y_mm = float(self.y_input.text())
                                 angle_deg = float(self.angle_input.text())
 
+                                # Convert workspace position to camera pixels
                                 target_pt = np.array([[[target_x_mm, target_y_mm]]], dtype=np.float32)
                                 target_px = cv2.perspectiveTransform(target_pt, self.H_workspace_to_camera)
                                 center_x = int(target_px[0][0][0])
                                 center_y = int(target_px[0][0][1])
 
                                 if 0 <= center_x < width and 0 <= center_y < height:
+                                    # Draw angle indicator line
+                                    # Line length in pixels
                                     line_length = 50
+
+                                    # Convert angle to radians (0° = horizontal right, counter-clockwise)
                                     angle_rad = np.radians(angle_deg)
+
+                                    # Calculate end point of angle line
                                     end_x = int(center_x + line_length * np.cos(angle_rad))
-                                    end_y = int(center_y - line_length * np.sin(angle_rad))
+                                    end_y = int(center_y - line_length * np.sin(angle_rad))  # Subtract because Y increases downward
 
+                                    # Draw the angle indicator line
+                                    cv2.line(frame, (center_x, center_y), (end_x, end_y), (255, 0, 255), 2, cv2.LINE_AA)
+
+                                    # Draw arrowhead at end
                                     cv2.arrowedLine(frame, (center_x, center_y), (end_x, end_y), (255, 0, 255), 2, cv2.LINE_AA, tipLength=0.3)
-                                    label = f"{angle_deg:.0f}°"
-                                    cv2.putText(frame, label, (center_x + 10, center_y - 10),
-                                              cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2, cv2.LINE_AA)
-                        except:
-                            pass
 
-                    # Draw info panel
+                                    # Draw angle label
+                                    label = f"{angle_deg:.0f}"
+                                    label_pos = (center_x + 10, center_y - 10)
+                                    cv2.putText(frame, label, label_pos, cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2, cv2.LINE_AA)
+                        except (ValueError, AttributeError):
+                            pass  # Ignore if inputs are invalid
+
+                    # Draw info panel if showing coordinates
                     if self.show_info_panel and self.clicked_workspace_pos is not None:
                         workspace_width = self.config.get("workspace", {}).get("width", 300)
                         workspace_height = self.config.get("workspace", {}).get("height", 300)
@@ -865,30 +991,39 @@ class CoordinateTester(QMainWindow):
 
                         info_lines = [
                             f"Pixel: ({self.mouse_click_x}, {self.mouse_click_y})",
-                            f"Position: ({click_x_mm:.1f}, {click_y_mm:.1f}) mm",
+                            f"Real: ({click_x_mm:.1f}, {click_y_mm:.1f}) mm",
                             f"In workspace: {'Yes' if in_workspace else 'No'}"
                         ]
 
-                        frame = self.draw_info_panel_on_frame(frame, self.mouse_click_x + 10,
-                                                             self.mouse_click_y + 10, info_lines, "Coordinates")
+                        frame = self.draw_info_panel_on_frame(
+                            frame,
+                            self.mouse_click_x + 10,
+                            self.mouse_click_y + 10,
+                            info_lines,
+                            "Coordinates"
+                        )
 
+                        # Draw crosshair at click position
                         cv2.drawMarker(frame, (self.mouse_click_x, self.mouse_click_y),
                                       (0, 255, 255), cv2.MARKER_CROSS, 20, 2)
 
-                    # Display
+                    # Display detection camera
                     h, w, ch = frame.shape
+
+                    # Store original image size for ClickableLabel coordinate scaling
                     if isinstance(self.detection_label, ClickableLabel):
                         self.detection_label.original_image_size = (w, h)
-
                     qt_image = QImage(frame.data, w, h, ch * w, QImage.Format.Format_RGB888)
                     pixmap = QPixmap.fromImage(qt_image.rgbSwapped())
 
+                    # Calculate displayed size for coordinate scaling
                     label_w = self.detection_label.width()
                     label_h = self.detection_label.height()
                     scale = min(label_w / w, label_h / h)
                     displayed_w = int(w * scale)
                     displayed_h = int(h * scale)
 
+                    # Store displayed image size for ClickableLabel coordinate scaling
                     if isinstance(self.detection_label, ClickableLabel):
                         self.detection_label.displayed_image_size = (displayed_w, displayed_h)
 
@@ -897,7 +1032,9 @@ class CoordinateTester(QMainWindow):
                                                  Qt.TransformationMode.SmoothTransformation)
                     self.detection_label.setPixmap(scaled_pixmap)
             except Exception as e:
-                pass
+                error_msg = str(e)
+                if "Spinnaker" not in error_msg and "timeout" not in error_msg.lower():
+                    print(f"[ERROR] Detection camera update failed: {error_msg}")
 
         # Update inspection camera
         if self.inspection_camera:
@@ -906,6 +1043,7 @@ class CoordinateTester(QMainWindow):
                 if not image_result.IsIncomplete():
                     image_data = image_result.GetNDArray()
 
+                    # Handle different pixel formats
                     if len(image_data.shape) == 2:
                         frame = cv2.cvtColor(image_data, cv2.COLOR_GRAY2BGR)
                     elif len(image_data.shape) == 3:
@@ -916,14 +1054,15 @@ class CoordinateTester(QMainWindow):
 
                     image_result.Release()
 
-                    # Draw center point
+                    # Draw center point marker to show gripper aim point
                     h, w, ch = frame.shape
                     center_x = w // 2
                     center_y = h // 2
-                    cv2.circle(frame, (center_x, center_y), 3, (0, 0, 255), -1, cv2.LINE_AA)
-                    cv2.circle(frame, (center_x, center_y), 10, (0, 255, 255), 1, cv2.LINE_AA)
 
-                    # Display
+                    # Draw red dot at center
+                    cv2.circle(frame, (center_x, center_y), 3, (0, 0, 255), -1, cv2.LINE_AA)
+
+                    # Display inspection camera
                     qt_image = QImage(frame.data, w, h, ch * w, QImage.Format.Format_RGB888)
                     pixmap = QPixmap.fromImage(qt_image.rgbSwapped())
                     scaled_pixmap = pixmap.scaled(self.inspection_label.size(),
@@ -931,13 +1070,17 @@ class CoordinateTester(QMainWindow):
                                                  Qt.TransformationMode.SmoothTransformation)
                     self.inspection_label.setPixmap(scaled_pixmap)
             except Exception as e:
-                pass
+                error_msg = str(e)
+                if "Spinnaker" not in error_msg and "timeout" not in error_msg.lower():
+                    print(f"[ERROR] Inspection camera update failed: {error_msg}")
 
     def closeEvent(self, event):
         """Handle window close event"""
+        # Stop timer
         if hasattr(self, 'timer'):
             self.timer.stop()
 
+        # Cleanup cameras
         if self.detection_camera:
             try:
                 self.detection_camera.EndAcquisition()
@@ -964,16 +1107,6 @@ class CoordinateTester(QMainWindow):
 
 
 def main():
-    print("="*70)
-    print("  🎯 xArm Coordinate Testing Tool")
-    print("="*70)
-    print("📋 Usage:")
-    print("  1. Start robot controller: python3 xarm-motion-no-wait.py")
-    print("  2. Start this GUI tool:    python3 coordinate_tester.py")
-    print("  3. Click on detected objects or enter coordinates manually")
-    print("  4. Use 'Inspect Target' button to move robot")
-    print("="*70 + "\n")
-
     app = QApplication(sys.argv)
 
     # Set dark theme
