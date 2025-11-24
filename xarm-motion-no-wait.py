@@ -259,9 +259,14 @@ class XArmController:
         self.connect_robot()
         self.initialize_robot()
 
-        # MODIFIED: Skip calibration wait - go straight to home
-        print("[Robot] Skipping calibration wait - using existing calibration")
-        print("[Robot] Moving to home position...")
+        # NO-WAIT VERSION: Skip calibration - go directly to home
+        print("\n" + "="*60)
+        print("[NO-WAIT MODE] This version skips camera calibration")
+        print("[NO-WAIT MODE] Using existing calibration files:")
+        print(f"[NO-WAIT MODE]   - homography_auto.pkl")
+        print(f"[NO-WAIT MODE]   - homography_det_to_robot.pkl")
+        print("[NO-WAIT MODE] Robot moving directly to home position...")
+        print("="*60 + "\n")
         self.go_home()
 
     def load_config(self, path="config.json"):
@@ -1059,26 +1064,23 @@ class XArmClickController:
         self.workspace_min_y = click_config.get("workspace_min_y", 0)
         self.workspace_max_y = click_config.get("workspace_max_y", 300)
 
-        print("\n" + "="*60)
-        print("xArm CONTROLLER - NO CALIBRATION WAIT VERSION")
-        print("="*60)
-        print("Mouse Button Controls:")
-        print("  • LEFT CLICK   → Move to position")
-        print("  • RIGHT CLICK  → Pick/Place TOGGLE")
-        print("    - First click:  PICK object")
-        print("    - Second click: PLACE object")
-        print("    - Third click:  PICK again (repeats)")
-        print("\nKeyboard Controls:")
-        print("  • 'T' KEY → Inspect selected object")
-        print("\nNote: You MUST place before you can pick again!")
-        print(f"\nInspection:")
-        print(f"  • Camera offset: ({CAMERA_OFFSET_X:.1f}, {CAMERA_OFFSET_Y:.1f}) ± ({CAMERA_OFFSET_ERROR_X:.1f}, {CAMERA_OFFSET_ERROR_Y:.1f}) mm")
-        print(f"\nWorkspace: X=[{self.workspace_min_x}-{self.workspace_max_x}], "
-              f"Y=[{self.workspace_min_y}-{self.workspace_max_y}]")
-        print(f"Safe height: {self.arm.safe_height}mm, Pick height: {self.arm.pick_height}mm")
-        print(f"Inspection height: {self.arm.inspect_height}mm")
-        print(f"Coordinate transformation: Using homography matrix (handles rotation)")
-        print("="*60 + "\n")
+        print("\n" + "="*70)
+        print("  xArm ROBOT CONTROLLER - NO-WAIT VERSION (For Testing)")
+        print("="*70)
+        print("⚡ QUICK START MODE: Skips calibration wait, goes straight to home")
+        print("🎯 USE WITH: coordinate_tester.py (GUI) for visual testing")
+        print("-"*70)
+        print("Commands via Shared Memory:")
+        print("  • InspectData → Inspection positioning & Home commands")
+        print("  • ClickData   → Move, Pick, Place operations")
+        print()
+        print(f"Workspace: X=[{self.workspace_min_x}-{self.workspace_max_x}], "
+              f"Y=[{self.workspace_min_y}-{self.workspace_max_y}] mm")
+        print(f"Heights: Safe={self.arm.safe_height}mm, Pick={self.arm.pick_height}mm, "
+              f"Inspect={self.arm.inspect_height}mm")
+        print(f"Camera offset: ({CAMERA_OFFSET_X:.1f}, {CAMERA_OFFSET_Y:.1f}) ± "
+              f"({CAMERA_OFFSET_ERROR_X:.1f}, {CAMERA_OFFSET_ERROR_Y:.1f}) mm")
+        print("="*70 + "\n")
 
     def is_position_safe(self, x, y):
         """Check if position is within safe workspace bounds."""
