@@ -465,7 +465,7 @@ class XArmController:
     def calculate_optimal_inspect_angle(self, object_angle):
         """
         Calculate camera rotation based on object angle range.
-        
+
         v1.7: Camera rotation based on angle, not orientation.
 
         Args:
@@ -476,7 +476,7 @@ class XArmController:
         """
         # Normalize angle to 0-180 range
         angle_norm = object_angle % 180
-        
+
         # Apply rotation based on angle range
         if 0 <= angle_norm < 80:
             # Angle 0-79°: Add 270° rotation
@@ -484,8 +484,63 @@ class XArmController:
         else:  # 80-180°
             # Angle 80-180°: Add 90° rotation
             camera_rotation = 180
-        
+
         return object_angle + camera_rotation
+
+    def get_error_offset_for_angle(self, angle):
+        """
+        Calculate error offset based on angle range.
+        Adjust the values in each range to calibrate for different angles.
+
+        Returns: (error_x, error_y) tuple
+        """
+        # Normalize angle to 0-180° range
+        angle_norm = angle % 180
+
+        # Apply error offset based on angle range
+        # TODO: Adjust these values when you find perfect error offset values
+        if 0 <= angle_norm < 30:
+            # Angle 0-29°: Base position, no error correction needed
+            error_x = 0.5
+            error_y = 3.0
+        elif 30 <= angle_norm < 40:
+            # Angle 30-39°: Adjust these values based on testing
+            error_x = 0.5
+            error_y = 1.5
+        elif 40 <= angle_norm < 50:
+            # Angle 40-49°: Adjust these values based on testing
+            error_x = -0.5
+            error_y = 0.5
+        elif 50 <= angle_norm < 60:
+            # Angle 50-59°: Adjust these values based on testing
+            error_x = -0.5
+            error_y = -0.5
+        elif 60 <= angle_norm < 70:
+            # Angle 60-89°: Adjust these values based on testing
+            error_x = -1.0
+            error_y = -1.3
+        elif 70 <= angle_norm < 80:
+            # Angle 70-79°: Adjust these values based on testing
+            error_x = 0.0
+            error_y = -2.0
+        elif 80 <= angle_norm < 90:
+            # Angle 80-89°: Adjust these values based on testing
+            error_x = -4.0
+            error_y = 4.2
+        elif 90 <= angle_norm < 120:
+            # Angle 90-119°: Adjust these values based on testing
+            error_x = -2.5
+            error_y = 5.0
+        elif 120 <= angle_norm < 160:
+            # Angle 120-159°: Adjust these values based on testing
+            error_x = -0.5
+            error_y = 5.0
+        else:  # 150-180°
+            # Angle 150-180°: Adjust these values based on testing
+            error_x = 0.5
+            error_y = 4.0
+
+        return error_x, error_y
 
     def connect_robot(self):
         """Connect to the xArm robot."""
@@ -989,10 +1044,17 @@ class XArmController:
             
             gripper_det_x, gripper_det_y = best_position
             offset_position_angle = best_angle  # The selected position offset angle
-            
-            print(f"[Inspect] ✓ SELECTED: Position ({gripper_det_x:.1f}, {gripper_det_y:.1f}) mm, Offset angle: {offset_position_angle:.1f}°")
+
+            # Apply angle-based error offset for camera calibration
+            error_x, error_y = self.get_error_offset_for_angle(object_angle)
+            gripper_det_x += error_x
+            gripper_det_y += error_y
+
+            print(f"[Inspect] ✓ SELECTED: Position ({gripper_det_x - error_x:.1f}, {gripper_det_y - error_y:.1f}) mm, Offset angle: {offset_position_angle:.1f}°")
+            print(f"[Inspect] Error offset for angle {object_angle:.1f}°: ({error_x:+.1f}, {error_y:+.1f}) mm")
+            print(f"[Inspect] Final position after error correction: ({gripper_det_x:.1f}, {gripper_det_y:.1f}) mm")
             print(f"[Inspect] Camera rotation: {camera_angle:.1f}°")
-            
+
             # Transform gripper position to robot coordinates
             robot_x, robot_y = self.transform_detection_to_robot(gripper_det_x, gripper_det_y)
 
