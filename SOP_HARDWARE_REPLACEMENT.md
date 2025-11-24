@@ -372,9 +372,31 @@ Calibration runs automatically on first startup after deletion of calibration fi
 
 ## System Startup
 
+### Startup Options
+
+The system can be started in **two different modes:**
+
+**Option A: GUI Application (Recommended for Setup/Calibration)**
+- User-friendly graphical interface
+- Built-in calibration wizard
+- Visual feedback and monitoring
+- **INFO ONLY mode** - shows detection data but does NOT control robot
+- Best for: Initial setup, calibration, testing, monitoring
+
+**Option B: Command-Line Mode (Recommended for Production)**
+- Full robot control capability
+- Pick and place operations
+- Inspection mode
+- Best for: Active production, automated operations
+
+Choose **Option A** if you need to calibrate the system or just monitor detections.
+Choose **Option B** if you need full robot control for pick-and-place operations.
+
+---
+
 ### Prerequisites Check
 
-**Before starting, verify:**
+**Before starting either mode, verify:**
 - [ ] Robot powered on and connected to network
 - [ ] Both cameras connected via USB
 - [ ] Configuration file updated (config.json)
@@ -382,7 +404,93 @@ Calibration runs automatically on first startup after deletion of calibration fi
 - [ ] Workspace clear of obstacles
 - [ ] Emergency stop accessible
 
-### Step-by-Step Startup Sequence
+---
+
+### Option A: GUI Application Startup
+
+**Use this method for calibration, setup, and monitoring.**
+
+#### Step 1: Start GUI Application
+
+```bash
+cd /home/user/arm-app
+python3 arm-app-v1.1.py
+```
+
+#### Step 2: Configure Calibration (First Time Setup)
+
+**Tab 1: Calibration Setup**
+
+1. **Detection Camera Calibration:**
+   - Select "Auto Calibration (Circle Detection)" from dropdown
+   - Ensure 4 white circles (20-30mm) are visible at workspace corners
+   - Click "Calibrate" button
+   - Wait for confirmation message
+   - Calibration file saved: `homography_auto.pkl`
+
+2. **Robot Coordinate Transformation:**
+   - Leave "Auto Calculation" checkbox enabled
+   - Enter only Bottom Left (BL) and Top Right (TR) robot coordinates:
+     - **BL:** Workspace (0, 0) → Robot (88.9, 312.0)
+     - **TR:** Workspace (300, 300) → Robot (382.0, 14.7)
+   - Click "Calculate" button
+   - System auto-calculates BR and TL coordinates
+   - Calibration file saved: `homography_det_to_robot.pkl`
+
+#### Step 3: Start Live Detection
+
+**Tab 2: Live Camera View**
+
+1. Click **"START System"** button at bottom
+2. Detection camera feed appears
+3. YOLO detection starts automatically
+4. Objects inside workspace show in **green**
+5. Objects outside workspace show in **red**
+6. Detection status shown: "Not Ready" / "Detect" / "Ready"
+
+#### Step 4: Monitor and Test
+
+**Features Available:**
+
+- **Single Click on Object:**
+  - Shows object information panel
+  - Displays: ID, position, angle, dimensions
+  - Shows workspace coordinates
+
+- **Double Click on Object:**
+  - Opens inspection visualization box (36mm × 36mm)
+  - Use arrow keys to rotate: ← (CCW) / → (CW)
+  - Press ESC to close inspection box
+
+- **Single Click on Empty Space:**
+  - Shows clicked pixel coordinates
+  - Shows workspace mm coordinates
+  - Verifies calibration accuracy
+
+**Tab 3: System Info**
+
+- Shows system status and readiness percentage
+- Camera connection status
+- Calibration status
+- Theme selection (Dark/Light mode)
+
+#### Step 5: Stop System
+
+Click **"STOP System"** button when finished.
+
+**Important Notes:**
+- GUI runs in **INFO ONLY** mode - it does NOT send commands to the robot
+- It shares detection data via shared memory for monitoring
+- Robot controller (xarm-motion-v1.7.py) must be running separately for robot movement
+- Use this mode for calibration, testing, and verification
+
+---
+
+### Option B: Command-Line Startup (Full Robot Control)
+
+**Use this method for production operations with robot control.**
+
+#### Step-by-Step Startup Sequence
 
 #### Step 1: Open Two Terminal Windows
 
@@ -752,6 +860,13 @@ For additional support:
 ## Appendix: Quick Reference
 
 ### Startup Commands
+
+**Option A: GUI Application (Calibration/Monitoring)**
+```bash
+cd /home/user/arm-app && python3 arm-app-v1.1.py
+```
+
+**Option B: Command-Line (Full Robot Control)**
 ```bash
 # Terminal 1
 cd /home/user/arm-app && python3 xarm-motion-v1.7.py
@@ -775,6 +890,7 @@ rm homography_auto.pkl homography_det_to_robot.pkl
 ```
 Configuration:     /home/user/arm-app/config.json
 Calibration:       /home/user/arm-app/homography*.pkl
+GUI Application:   /home/user/arm-app/arm-app-v1.1.py
 Robot Controller:  /home/user/arm-app/xarm-motion-v1.7.py
 Vision System:     /home/user/arm-app/yolo-mouse-v2.py
 Documentation:     /home/user/arm-app/README.md
