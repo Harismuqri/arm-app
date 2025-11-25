@@ -1,6 +1,6 @@
 {
     "profile_name": "xarm-yolo",
-    "created_date": "2025-11-25 11:01:58",
+    "created_date": "2025-11-25 14:52:41",
     "detection_calibration": {
         "BL": {
             "pixel_x": "",
@@ -34,11 +34,23 @@
             "robot_x": "88.9",
             "robot_y": "312"
         },
+        "BR": {
+            "workspace_x": "300",
+            "workspace_y": "0",
+            "robot_x": "88.9",
+            "robot_y": "14.7"
+        },
         "TR": {
             "workspace_x": "300",
             "workspace_y": "300",
             "robot_x": "382",
             "robot_y": "14.7"
+        },
+        "TL": {
+            "workspace_x": "0",
+            "workspace_y": "300",
+            "robot_x": "382.0",
+            "robot_y": "312.0"
         },
         "auto_mode": true
     },

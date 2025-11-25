@@ -18,9 +18,10 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                               QPushButton, QGroupBox, QGridLayout, QTextEdit,
                               QCheckBox, QComboBox, QMessageBox, QSizePolicy)
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
-from PyQt6.QtGui import QImage, QPixmap, QFont, QPalette, QColor
+from PyQt6.QtGui import QImage, QPixmap, QFont, QIcon, QPalette, QColor
 from ultralytics import YOLO
 import PySpin
+
 
 
 class ClickableLabel(QLabel):
@@ -398,7 +399,8 @@ class RobotVisionGUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Intelligent Robot Positioning")
-        self.setGeometry(100, 100, 900, 850)  # Same size as before
+        self.setWindowIcon(QIcon())  # Remove window icon for professional look
+        self.resize(600, 600)  # 600×600 window, Qt centers it automatically
 
         # Load configuration
         self.config = self.load_config()
@@ -460,10 +462,7 @@ class RobotVisionGUI(QMainWindow):
         self.camera_timer = QTimer()
         self.camera_timer.timeout.connect(self.update_camera_feeds)
 
-        # Timer for info display updates (real-time timestamp)
-        self.info_timer = QTimer()
-        self.info_timer.timeout.connect(self.update_info_display)
-        self.info_timer.start(1000)  # Update every 1 second
+        # Info display updates only when system changes (no auto-timer)
 
     def load_config(self, path="config.json"):
         """Load configuration from JSON file"""
@@ -511,9 +510,7 @@ class RobotVisionGUI(QMainWindow):
         tabs.addTab(self.create_info_tab(), "System Info")
         tabs.addTab(self.create_settings_tab(), "Settings")
 
-        # Add control panel at bottom
-        self.control_panel = self.create_control_panel()
-        main_layout.addWidget(self.control_panel)
+        # START/STOP buttons moved to Live Camera View tab
 
         # Status bar
         self.statusBar().showMessage("Ready - Configure calibration and press START")
@@ -556,11 +553,16 @@ class RobotVisionGUI(QMainWindow):
         status_info_layout2.addStretch()
         status_layout.addLayout(status_info_layout2)
         
-        # Reload button
-        reload_btn = QPushButton("Reload Homography Files")
+        # Reload button - right aligned
+        reload_layout = QHBoxLayout()
+        reload_layout.addStretch()
+        reload_btn = QPushButton("Reload")
+        reload_btn.setFixedWidth(80)
+        reload_btn.setFixedHeight(30)
         reload_btn.clicked.connect(self.reload_homography_files)
-        reload_btn.setToolTip("Load existing calibration files (homography_auto.pkl and homography_det_to_robot.pkl)")
-        status_layout.addWidget(reload_btn)
+        reload_btn.setToolTip("Reload homography calibration files")
+        reload_layout.addWidget(reload_btn)
+        status_layout.addLayout(reload_layout)
         
         status_group.setLayout(status_layout)
         layout.addWidget(status_group)
@@ -633,8 +635,10 @@ class RobotVisionGUI(QMainWindow):
             # Pixel inputs
             pixel_x = QLineEdit()
             pixel_x.setPlaceholderText("Pixel X")
+            pixel_x.setAlignment(Qt.AlignmentFlag.AlignLeft)
             pixel_y = QLineEdit()
             pixel_y.setPlaceholderText("Pixel Y")
+            pixel_y.setAlignment(Qt.AlignmentFlag.AlignLeft)
             grid_layout.addWidget(pixel_x, row, 1)
             grid_layout.addWidget(pixel_y, row, 2)
 
@@ -644,8 +648,10 @@ class RobotVisionGUI(QMainWindow):
             # Workspace inputs
             mm_x = QLineEdit()
             mm_x.setPlaceholderText("Workspace X (mm)")
+            mm_x.setAlignment(Qt.AlignmentFlag.AlignLeft)
             mm_y = QLineEdit()
             mm_y.setPlaceholderText("Workspace Y (mm)")
+            mm_y.setAlignment(Qt.AlignmentFlag.AlignLeft)
             grid_layout.addWidget(mm_x, row, 4)
             grid_layout.addWidget(mm_y, row, 5)
 
@@ -710,8 +716,10 @@ class RobotVisionGUI(QMainWindow):
             # Workspace inputs
             ws_x = QLineEdit()
             ws_x.setPlaceholderText("Workspace X (mm)")
+            ws_x.setAlignment(Qt.AlignmentFlag.AlignLeft)
             ws_y = QLineEdit()
             ws_y.setPlaceholderText("Workspace Y (mm)")
+            ws_y.setAlignment(Qt.AlignmentFlag.AlignLeft)
             robot_grid_layout.addWidget(ws_x, row, 1)
             robot_grid_layout.addWidget(ws_y, row, 2)
 
@@ -721,8 +729,10 @@ class RobotVisionGUI(QMainWindow):
             # Robot inputs
             robot_x = QLineEdit()
             robot_x.setPlaceholderText("Robot X (mm)")
+            robot_x.setAlignment(Qt.AlignmentFlag.AlignLeft)
             robot_y = QLineEdit()
             robot_y.setPlaceholderText("Robot Y (mm)")
+            robot_y.setAlignment(Qt.AlignmentFlag.AlignLeft)
             robot_grid_layout.addWidget(robot_x, row, 4)
             robot_grid_layout.addWidget(robot_y, row, 5)
 
@@ -805,6 +815,26 @@ class RobotVisionGUI(QMainWindow):
         self.detection_info.setMaximumHeight(100)
         self.detection_info.setFont(QFont("Segoe UI", 9))
         main_layout.addWidget(self.detection_info)
+        
+        # START/STOP control buttons
+        control_layout = QHBoxLayout()
+        
+        self.start_btn = QPushButton("START")
+        self.start_btn.setFixedWidth(200)
+        self.start_btn.setFixedHeight(40)
+        self.start_btn.setStyleSheet("background-color: #4CAF50; color: white; font-size: 14px; font-weight: bold;")
+        self.start_btn.clicked.connect(self.start_system)
+        control_layout.addWidget(self.start_btn)
+        
+        self.stop_btn = QPushButton("STOP")
+        self.stop_btn.setFixedWidth(200)
+        self.stop_btn.setFixedHeight(40)
+        self.stop_btn.setStyleSheet("background-color: #f44336; color: white; font-size: 14px; font-weight: bold;")
+        self.stop_btn.setEnabled(False)
+        self.stop_btn.clicked.connect(self.stop_system)
+        control_layout.addWidget(self.stop_btn)
+        
+        main_layout.addLayout(control_layout)
 
         # Add stretch at bottom to push everything up
         main_layout.addStretch()
@@ -943,17 +973,23 @@ class RobotVisionGUI(QMainWindow):
         detection_layout.addWidget(QLabel("YOLO Model Path:"), 0, 0)
         self.setting_model_path = QLineEdit()
         self.setting_model_path.setText(self.config.get("yolo_model_path", ""))
-        detection_layout.addWidget(self.setting_model_path, 0, 1, 1, 2)
+        self.setting_model_path.setFixedWidth(200)
+        self.setting_model_path.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        detection_layout.addWidget(self.setting_model_path, 0, 1)
         
         browse_btn = QPushButton("Browse...")
+        browse_btn.setFixedWidth(80)
+        browse_btn.setFixedHeight(30)
         browse_btn.clicked.connect(self.browse_model_path)
-        detection_layout.addWidget(browse_btn, 0, 3)
+        detection_layout.addWidget(browse_btn, 0, 2)
         
         # Detection Confidence
         detection_layout.addWidget(QLabel("Detection Confidence:"), 1, 0)
         self.setting_confidence = QLineEdit()
         self.setting_confidence.setText(str(self.config.get("detection_confidence", 0.7)))
         self.setting_confidence.setPlaceholderText("0.0 - 1.0")
+        self.setting_confidence.setFixedWidth(200)
+        self.setting_confidence.setAlignment(Qt.AlignmentFlag.AlignLeft)
         detection_layout.addWidget(self.setting_confidence, 1, 1)
         
         # Camera Indices
@@ -961,12 +997,22 @@ class RobotVisionGUI(QMainWindow):
         self.setting_detection_cam = QLineEdit()
         cam_config = self.config.get("camera_config", {})
         self.setting_detection_cam.setText(str(cam_config.get("detection_camera_index", 0)))
+        self.setting_detection_cam.setFixedWidth(200)
+        self.setting_detection_cam.setAlignment(Qt.AlignmentFlag.AlignLeft)
         detection_layout.addWidget(self.setting_detection_cam, 2, 1)
         
         detection_layout.addWidget(QLabel("Inspection Camera Index:"), 3, 0)
         self.setting_inspection_cam = QLineEdit()
         self.setting_inspection_cam.setText(str(cam_config.get("inspection_camera_index", 1)))
+        self.setting_inspection_cam.setFixedWidth(200)
+        self.setting_inspection_cam.setAlignment(Qt.AlignmentFlag.AlignLeft)
         detection_layout.addWidget(self.setting_inspection_cam, 3, 1)
+        
+        # Set column stretch to push inputs to the left
+        detection_layout.setColumnStretch(0, 0)  # Labels - no stretch
+        detection_layout.setColumnStretch(1, 0)  # Inputs - no stretch
+        detection_layout.setColumnStretch(2, 0)  # Browse button - no stretch
+        detection_layout.setColumnStretch(3, 1)  # Empty column - takes all extra space
         
         detection_group.setLayout(detection_layout)
         main_layout.addWidget(detection_group)
@@ -980,22 +1026,30 @@ class RobotVisionGUI(QMainWindow):
         self.setting_offset_x = QLineEdit()
         cam_offset = self.config.get("camera_offset", {})
         self.setting_offset_x.setText(str(cam_offset.get("offset_x", 0.0)))
+        self.setting_offset_x.setFixedWidth(200)
+        self.setting_offset_x.setAlignment(Qt.AlignmentFlag.AlignLeft)
         inspection_layout.addWidget(self.setting_offset_x, 0, 1)
         
         inspection_layout.addWidget(QLabel("Camera Offset Y (mm):"), 1, 0)
         self.setting_offset_y = QLineEdit()
         self.setting_offset_y.setText(str(cam_offset.get("offset_y", 0.0)))
+        self.setting_offset_y.setFixedWidth(200)
+        self.setting_offset_y.setAlignment(Qt.AlignmentFlag.AlignLeft)
         inspection_layout.addWidget(self.setting_offset_y, 1, 1)
         
         # Offset Error
         inspection_layout.addWidget(QLabel("Offset Error X (mm):"), 2, 0)
         self.setting_error_x = QLineEdit()
         self.setting_error_x.setText(str(cam_offset.get("offset_error_x", 0.0)))
+        self.setting_error_x.setFixedWidth(200)
+        self.setting_error_x.setAlignment(Qt.AlignmentFlag.AlignLeft)
         inspection_layout.addWidget(self.setting_error_x, 2, 1)
         
         inspection_layout.addWidget(QLabel("Offset Error Y (mm):"), 3, 0)
         self.setting_error_y = QLineEdit()
         self.setting_error_y.setText(str(cam_offset.get("offset_error_y", 0.0)))
+        self.setting_error_y.setFixedWidth(200)
+        self.setting_error_y.setAlignment(Qt.AlignmentFlag.AlignLeft)
         inspection_layout.addWidget(self.setting_error_y, 3, 1)
         
         # Inspection Height
@@ -1003,7 +1057,14 @@ class RobotVisionGUI(QMainWindow):
         self.setting_inspection_height = QLineEdit()
         click_control = self.config.get("click_control", {})
         self.setting_inspection_height.setText(str(click_control.get("inspection_height", 103.4)))
+        self.setting_inspection_height.setFixedWidth(200)
+        self.setting_inspection_height.setAlignment(Qt.AlignmentFlag.AlignLeft)
         inspection_layout.addWidget(self.setting_inspection_height, 4, 1)
+        
+        # Set column stretch to push inputs to the left
+        inspection_layout.setColumnStretch(0, 0)  # Labels - no stretch
+        inspection_layout.setColumnStretch(1, 0)  # Inputs - no stretch
+        inspection_layout.setColumnStretch(2, 1)  # Empty column - takes all extra space
         
         inspection_group.setLayout(inspection_layout)
         main_layout.addWidget(inspection_group)
@@ -1016,26 +1077,51 @@ class RobotVisionGUI(QMainWindow):
         profile_layout.addWidget(QLabel("Profile Name:"), 0, 0)
         self.profile_name_input = QLineEdit()
         self.profile_name_input.setPlaceholderText("e.g., machine_A, station_1")
-        profile_layout.addWidget(self.profile_name_input, 0, 1, 1, 2)
+        self.profile_name_input.setFixedWidth(200)
+        self.profile_name_input.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        profile_layout.addWidget(self.profile_name_input, 0, 1)
         
         # Profile selection dropdown
         profile_layout.addWidget(QLabel("Saved Profiles:"), 1, 0)
         self.profile_combo = QComboBox()
+        self.profile_combo.setFixedWidth(200)
         self.refresh_profile_list()
-        profile_layout.addWidget(self.profile_combo, 1, 1, 1, 2)
+        profile_layout.addWidget(self.profile_combo, 1, 1)
         
-        # Profile action buttons
+        # Current active profile display
+        profile_layout.addWidget(QLabel("Current Active:"), 2, 0)
+        self.profile_current_display = QLabel("(None)")
+        self.profile_current_display.setStyleSheet("font-weight: bold; color: #0078d4;")
+        profile_layout.addWidget(self.profile_current_display, 2, 1)
+        
+        # Profile action buttons - right aligned
+        button_row = QHBoxLayout()
+        button_row.addStretch()
+        
         save_profile_btn = QPushButton("Save Profile")
+        save_profile_btn.setFixedWidth(100)
+        save_profile_btn.setFixedHeight(30)
         save_profile_btn.clicked.connect(self.save_profile)
-        profile_layout.addWidget(save_profile_btn, 2, 0)
+        button_row.addWidget(save_profile_btn)
         
         load_profile_btn = QPushButton("Load Profile")
+        load_profile_btn.setFixedWidth(100)
+        load_profile_btn.setFixedHeight(30)
         load_profile_btn.clicked.connect(self.load_profile)
-        profile_layout.addWidget(load_profile_btn, 2, 1)
+        button_row.addWidget(load_profile_btn)
         
         delete_profile_btn = QPushButton("Delete Profile")
+        delete_profile_btn.setFixedWidth(100)
+        delete_profile_btn.setFixedHeight(30)
         delete_profile_btn.clicked.connect(self.delete_profile)
-        profile_layout.addWidget(delete_profile_btn, 2, 2)
+        button_row.addWidget(delete_profile_btn)
+        
+        profile_layout.addLayout(button_row, 3, 0, 1, 2)
+        
+        # Set column stretch to push inputs to the left
+        profile_layout.setColumnStretch(0, 0)  # Labels - no stretch
+        profile_layout.setColumnStretch(1, 0)  # Inputs - no stretch
+        profile_layout.setColumnStretch(2, 1)  # Empty column - takes all extra space
         
         profile_group.setLayout(profile_layout)
         main_layout.addWidget(profile_group)
@@ -1045,19 +1131,26 @@ class RobotVisionGUI(QMainWindow):
         button_layout.addStretch()
         
         load_btn = QPushButton("Load from Config")
+        load_btn.setFixedWidth(130)
+        load_btn.setFixedHeight(30)
         load_btn.clicked.connect(self.load_settings_from_config)
         button_layout.addWidget(load_btn)
         
         save_btn = QPushButton("Save to Config")
+        save_btn.setFixedWidth(120)
+        save_btn.setFixedHeight(30)
         save_btn.clicked.connect(self.save_settings_to_config)
         button_layout.addWidget(save_btn)
         
         apply_btn = QPushButton("Apply Settings")
-        apply_btn.setStyleSheet("background-color: #0078d4; color: white; font-weight: bold;")
+        apply_btn.setFixedWidth(110)
+        apply_btn.setFixedHeight(30)
         apply_btn.clicked.connect(self.apply_settings)
         button_layout.addWidget(apply_btn)
         
         reset_btn = QPushButton("Reset to Defaults")
+        reset_btn.setFixedWidth(130)
+        reset_btn.setFixedHeight(30)
         reset_btn.clicked.connect(self.reset_settings)
         button_layout.addWidget(reset_btn)
         
@@ -1240,6 +1333,9 @@ class RobotVisionGUI(QMainWindow):
         """Refresh the profile dropdown list"""
         self.profile_combo.clear()
         
+        # Add "None" option first
+        self.profile_combo.addItem("(None)")
+        
         # Create profiles directory if it doesn't exist
         profiles_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles")
         os.makedirs(profiles_dir, exist_ok=True)
@@ -1249,11 +1345,8 @@ class RobotVisionGUI(QMainWindow):
             profiles = [f[:-5] for f in os.listdir(profiles_dir) if f.endswith('.json')]
             if profiles:
                 self.profile_combo.addItems(sorted(profiles))
-            else:
-                self.profile_combo.addItem("(No profiles saved)")
         except Exception as e:
             print(f"[Profile] Error listing profiles: {e}")
-            self.profile_combo.addItem("(Error loading profiles)")
     
     def save_profile(self):
         """Save current setup to a profile file"""
@@ -1304,7 +1397,7 @@ class RobotVisionGUI(QMainWindow):
                     }
                 },
                 
-                # Robot coordinate transformation
+                # Robot coordinate transformation (ALL 4 corners including BR/TL)
                 "robot_transformation": {
                     "BL": {
                         "workspace_x": self.robot_cal_inputs['BL']['ws_x'].text(),
@@ -1312,11 +1405,23 @@ class RobotVisionGUI(QMainWindow):
                         "robot_x": self.robot_cal_inputs['BL']['robot_x'].text(),
                         "robot_y": self.robot_cal_inputs['BL']['robot_y'].text()
                     },
+                    "BR": {
+                        "workspace_x": self.robot_cal_inputs['BR']['ws_x'].text(),
+                        "workspace_y": self.robot_cal_inputs['BR']['ws_y'].text(),
+                        "robot_x": self.robot_cal_inputs['BR']['robot_x'].text(),
+                        "robot_y": self.robot_cal_inputs['BR']['robot_y'].text()
+                    },
                     "TR": {
                         "workspace_x": self.robot_cal_inputs['TR']['ws_x'].text(),
                         "workspace_y": self.robot_cal_inputs['TR']['ws_y'].text(),
                         "robot_x": self.robot_cal_inputs['TR']['robot_x'].text(),
                         "robot_y": self.robot_cal_inputs['TR']['robot_y'].text()
+                    },
+                    "TL": {
+                        "workspace_x": self.robot_cal_inputs['TL']['ws_x'].text(),
+                        "workspace_y": self.robot_cal_inputs['TL']['ws_y'].text(),
+                        "robot_x": self.robot_cal_inputs['TL']['robot_x'].text(),
+                        "robot_y": self.robot_cal_inputs['TL']['robot_y'].text()
                     },
                     "auto_mode": self.robot_auto_mode.isChecked()
                 },
@@ -1369,7 +1474,7 @@ class RobotVisionGUI(QMainWindow):
         """Load setup from selected profile file"""
         profile_name = self.profile_combo.currentText()
         
-        if profile_name == "(No profiles saved)" or profile_name == "(Error loading profiles)":
+        if profile_name == "(None)" or profile_name == "(No profiles saved)" or profile_name == "(Error loading profiles)":
             QMessageBox.warning(self, "No Profile", "Please select a valid profile to load")
             return
         
@@ -1403,8 +1508,8 @@ class RobotVisionGUI(QMainWindow):
                 if "auto_mode" in robot_data:
                     self.robot_auto_mode.setChecked(robot_data["auto_mode"])
                 
-                # Load BL and TR
-                for corner in ['BL', 'TR']:
+                # Load ALL 4 corners (BL, BR, TR, TL)
+                for corner in ['BL', 'BR', 'TR', 'TL']:
                     if corner in robot_data:
                         self.robot_cal_inputs[corner]['ws_x'].setText(str(robot_data[corner].get('workspace_x', '')))
                         self.robot_cal_inputs[corner]['ws_y'].setText(str(robot_data[corner].get('workspace_y', '')))
@@ -1434,9 +1539,12 @@ class RobotVisionGUI(QMainWindow):
             self.config["last_used_profile"] = profile_name
             self.save_last_profile_to_config(profile_name)
             
-            # Update current profile label
+            # Update current profile labels (both locations)
             self.current_profile_label.setText(profile_name)
             self.current_profile_label.setStyleSheet("font-weight: bold; color: #0078d4;")
+            if hasattr(self, 'profile_current_display'):
+                self.profile_current_display.setText(profile_name)
+                self.profile_current_display.setStyleSheet("font-weight: bold; color: #0078d4;")
             
             created_date = profile_data.get('created_date', 'Unknown')
             QMessageBox.information(self, "Success", f"Profile '{profile_name}' loaded successfully!\n\nCreated: {created_date}\n\nClick 'Apply Settings' and calibration buttons to activate.")
@@ -1450,7 +1558,7 @@ class RobotVisionGUI(QMainWindow):
         """Delete selected profile file"""
         profile_name = self.profile_combo.currentText()
         
-        if profile_name == "(No profiles saved)" or profile_name == "(Error loading profiles)":
+        if profile_name == "(None)" or profile_name == "(No profiles saved)" or profile_name == "(Error loading profiles)":
             QMessageBox.warning(self, "No Profile", "Please select a valid profile to delete")
             return
         
@@ -1549,8 +1657,8 @@ class RobotVisionGUI(QMainWindow):
                 if "auto_mode" in robot_data:
                     self.robot_auto_mode.setChecked(robot_data["auto_mode"])
                 
-                # Load BL and TR
-                for corner in ['BL', 'TR']:
+                # Load ALL 4 corners (BL, BR, TR, TL)
+                for corner in ['BL', 'BR', 'TR', 'TL']:
                     if corner in robot_data:
                         self.robot_cal_inputs[corner]['ws_x'].setText(str(robot_data[corner].get('workspace_x', '')))
                         self.robot_cal_inputs[corner]['ws_y'].setText(str(robot_data[corner].get('workspace_y', '')))
@@ -1574,9 +1682,12 @@ class RobotVisionGUI(QMainWindow):
                 self.setting_error_y.setText(str(insp_data.get('error_y', '0.0')))
                 self.setting_inspection_height.setText(str(insp_data.get('inspection_height', '103.4')))
             
-            # Update current profile label
+            # Update current profile labels (both locations)
             self.current_profile_label.setText(last_profile)
             self.current_profile_label.setStyleSheet("font-weight: bold; color: #0078d4;")
+            if hasattr(self, 'profile_current_display'):
+                self.profile_current_display.setText(last_profile)
+                self.profile_current_display.setStyleSheet("font-weight: bold; color: #0078d4;")
             
             # Select in dropdown if exists
             if hasattr(self, 'profile_combo'):
@@ -1633,63 +1744,6 @@ class RobotVisionGUI(QMainWindow):
             QGroupBox { background-color: #3c3c3c; border: 1px solid #555555; border-radius: 6px; margin-top: 6px; padding-top: 10px; }
             QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 3px; }
         """)
-
-    def create_control_panel(self):
-        """Create control panel with START/STOP buttons"""
-        widget = QWidget()
-        layout = QHBoxLayout(widget)
-        layout.setContentsMargins(5, 5, 5, 5)  # Reduce margins
-
-        # Set fixed size policy and height to prevent expansion
-        widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        widget.setFixedHeight(50)  # Fixed height (not just maximum)
-
-        self.start_btn = QPushButton("START System")
-        self.start_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                font-size: 16px;
-                padding: 10px;
-                border-radius: 4px;
-                border: 2px solid #4CAF50;
-            }
-            QPushButton:hover {
-                background-color: #66BB6A;
-                border: 2px solid #66BB6A;
-            }
-            QPushButton:pressed {
-                background-color: #2E7D32;
-                border: 2px solid #2E7D32;
-            }
-        """)
-        self.start_btn.clicked.connect(self.start_system)
-        layout.addWidget(self.start_btn)
-
-        self.stop_btn = QPushButton("STOP System")
-        self.stop_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #f44336;
-                color: white;
-                font-size: 16px;
-                padding: 10px;
-                border-radius: 4px;
-                border: 2px solid #f44336;
-            }
-            QPushButton:hover {
-                background-color: #ff6659;
-                border: 2px solid #ff6659;
-            }
-            QPushButton:pressed {
-                background-color: #c62828;
-                border: 2px solid #c62828;
-            }
-        """)
-        self.stop_btn.setEnabled(False)
-        self.stop_btn.clicked.connect(self.stop_system)
-        layout.addWidget(self.stop_btn)
-
-        return widget
 
     def toggle_detection_calibration_mode(self, index):
         """Toggle between auto and manual detection calibration mode"""
@@ -2712,9 +2766,8 @@ class RobotVisionGUI(QMainWindow):
         # Update Vision System
         model_path = self.config.get("yolo_model_path", "")
         if model_path:
-            # Show only filename
-            model_name = os.path.basename(model_path)
-            self.info_model.setText(model_name)
+            # Show full path
+            self.info_model.setText(model_path)
         else:
             self.info_model.setText("Not configured")
         
@@ -2782,8 +2835,14 @@ class RobotVisionGUI(QMainWindow):
             self.info_insp_status.setText("❌ Disconnected")
             self.info_insp_status.setStyleSheet("color: #f44336;")
         
-        # Update timestamp
-        self.info_timestamp.setText(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        # Update timestamp - show last config modification time
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+        if os.path.exists(config_path):
+            mod_time = os.path.getmtime(config_path)
+            timestamp = datetime.fromtimestamp(mod_time).strftime('%Y-%m-%d %H:%M:%S')
+            self.info_timestamp.setText(timestamp)
+        else:
+            self.info_timestamp.setText("Never")
 
     def start_system(self):
         """Start the vision system"""
@@ -2970,7 +3029,7 @@ class RobotVisionGUI(QMainWindow):
 
     def _restore_normal_size(self):
         """Helper to restore normal window size and update layout"""
-        self.resize(900, 850)
+        self.resize(600, 600)
         # Force control panel to update its geometry
         if hasattr(self, 'control_panel'):
             self.control_panel.updateGeometry()
