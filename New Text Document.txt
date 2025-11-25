@@ -1,0 +1,10 @@
+detection: 
+- calibrate
+
+- create homography file for camera - workspace - robot
+- pkl file
+
+inspection:
+- offset camera
+- offset error
+- inspection height

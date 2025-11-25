@@ -24,7 +24,6 @@
         "coordinate_offset_x": 0,
         "coordinate_offset_y": -150
     },
-
     "_comment_vision": "=== Vision System Settings (arm-app-v1.1.py) ===",
     "yolo_model_path": "D:\\2. yolo\\train30\\weights\\best.pt",
     "detection_confidence": 0.8,
@@ -42,7 +41,6 @@
         "width": 300,
         "height": 300
     },
-
     "_comment_legacy": "=== Legacy Settings (yolo-mouse-v2.py - OpenCV windows only) ===",
     "window_config": {
         "detection_width": 960,
@@ -57,5 +55,6 @@
         "calibration_height": 720,
         "calibration_pos_x": 480,
         "calibration_pos_y": 180
-    }
+    },
+    "last_used_profile": "xarm-yolo"
 }

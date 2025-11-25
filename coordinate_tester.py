@@ -650,30 +650,46 @@ class CoordinateTester(QMainWindow):
 
         # Apply error offset based on angle range
         # TODO: Adjust these values when you find perfect error offset values
-        if 0 <= angle_norm < 50:
-            # Angle 0-49°: Base position, no error correction needed
+        if 0 <= angle_norm < 30:
+            # Angle 0-29°: Base position, no error correction needed
+            error_x = 0.5
+            error_y = 3.0
+        elif 30 <= angle_norm < 40:
+            # Angle 30-39°: Adjust these values based on testing
+            error_x = 0.5
+            error_y = 1.5
+        elif 40 <= angle_norm < 50:
+            # Angle 40-49°: Adjust these values based on testing
+            error_x = -0.5
+            error_y = 0.5
+        elif 50 <= angle_norm < 60:
+            # Angle 50-59°: Adjust these values based on testing
+            error_x = -0.5
+            error_y = -0.5
+        elif 60 <= angle_norm < 70:
+            # Angle 60-89°: Adjust these values based on testing
+            error_x = -1.0
+            error_y = -1.3
+        elif 70 <= angle_norm < 80:
+            # Angle 70-79°: Adjust these values based on testing
             error_x = 0.0
-            error_y = 0.0
-        elif 50 <= angle_norm < 80:
-            # Angle 50-79°: Adjust these values based on testing
-            error_x = 0.0
-            error_y = 0.0
+            error_y = -2.0
         elif 80 <= angle_norm < 90:
             # Angle 80-89°: Adjust these values based on testing
-            error_x = -2.0
-            error_y = -0.5
-        elif 90 <= angle_norm < 135:
-            # Angle 90-134°: Adjust these values based on testing
-            error_x = -2.0
-            error_y = -0.5
-        elif 135 <= angle_norm < 150:
-            # Angle 135-149°: Adjust these values based on testing
-            error_x = 0.0
-            error_y = 0.0
-        else:  # 150-180°
-            # Angle 150-180°: Adjust these values based on testing
-            error_x = 0.0
-            error_y = 0.0
+            error_x = -4.0
+            error_y = 4.2
+        elif 90 <= angle_norm < 120:
+            # Angle 90-119°: Adjust these values based on testing
+            error_x = -2.5
+            error_y = 5.0
+        elif 120 <= angle_norm < 160:
+            # Angle 120-159°: Adjust these values based on testing
+            error_x = -0.5
+            error_y = 5.0
+        else:  # 160-180°
+            # Angle 160-180°: Adjust these values based on testing
+            error_x = 0.5
+            error_y = 4.0
 
         return error_x, error_y
 

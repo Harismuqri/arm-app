@@ -1,0 +1,58 @@
+{
+    "profile_name": "xarm-yolo",
+    "created_date": "2025-11-25 11:01:58",
+    "detection_calibration": {
+        "BL": {
+            "pixel_x": "",
+            "pixel_y": "",
+            "workspace_x": "",
+            "workspace_y": ""
+        },
+        "BR": {
+            "pixel_x": "",
+            "pixel_y": "",
+            "workspace_x": "",
+            "workspace_y": ""
+        },
+        "TR": {
+            "pixel_x": "",
+            "pixel_y": "",
+            "workspace_x": "",
+            "workspace_y": ""
+        },
+        "TL": {
+            "pixel_x": "",
+            "pixel_y": "",
+            "workspace_x": "",
+            "workspace_y": ""
+        }
+    },
+    "robot_transformation": {
+        "BL": {
+            "workspace_x": "0",
+            "workspace_y": "0",
+            "robot_x": "88.9",
+            "robot_y": "312"
+        },
+        "TR": {
+            "workspace_x": "300",
+            "workspace_y": "300",
+            "robot_x": "382",
+            "robot_y": "14.7"
+        },
+        "auto_mode": true
+    },
+    "detection_settings": {
+        "model_path": "D:\\2. yolo\\train30\\weights\\best.pt",
+        "confidence": "0.8",
+        "detection_camera_index": "0",
+        "inspection_camera_index": "1"
+    },
+    "inspection_settings": {
+        "offset_x": "0.8",
+        "offset_y": "85.3",
+        "error_x": "0.0",
+        "error_y": "0.0",
+        "inspection_height": "103.4"
+    }
+}
