@@ -441,8 +441,11 @@ class RobotVisionGUI(QMainWindow):
         self.last_outputs = {}  # Track last output for each object
         self.last_change_time = {}  # Track last change time for each object
 
-        # YOLO model
-        model_path = self.config.get("yolo_model_path", "best.pt")
+        # YOLO model - use path relative to script location
+        model_path = self.config.get("yolo_model_path", "models/best.pt")
+        if not os.path.isabs(model_path):  # If relative path
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            model_path = os.path.join(script_dir, model_path)
         self.model = YOLO(model_path)
         self.model.overrides['verbose'] = False
 
@@ -482,10 +485,16 @@ class RobotVisionGUI(QMainWindow):
         """Return default configuration"""
         return {
             "yolo_model_path": "best.pt",
-            "detection_confidence": 0.7,
+            "detection_confidence": 0.8,
             "camera_config": {
                 "detection_camera_index": 0,
                 "inspection_camera_index": 1
+            },
+            "camera_offset": {
+                "offset_x": 0.8,
+                "offset_y": 85.3,
+                "offset_error_x": 0.0,
+                "offset_error_y": 0.0
             },
             "workspace": {
                 "width": 300,
@@ -1051,6 +1060,15 @@ class RobotVisionGUI(QMainWindow):
         self.setting_error_y.setFixedWidth(200)
         self.setting_error_y.setAlignment(Qt.AlignmentFlag.AlignLeft)
         inspection_layout.addWidget(self.setting_error_y, 3, 1)
+
+        # Camera Mounting Angle
+        inspection_layout.addWidget(QLabel("Camera Mounting Angle (deg):"), 5, 0)
+        self.setting_camera_angle = QLineEdit()
+        click_control = self.config.get("click_control", {})
+        self.setting_camera_angle.setText(str(click_control.get("camera_mounting_angle", 0)))
+        self.setting_camera_angle.setFixedWidth(200)
+        self.setting_camera_angle.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        inspection_layout.addWidget(self.setting_camera_angle, 5, 1)
         
         # Inspection Height
         inspection_layout.addWidget(QLabel("Inspection Height (mm):"), 4, 0)
@@ -1288,6 +1306,7 @@ class RobotVisionGUI(QMainWindow):
             if "click_control" not in self.config:
                 self.config["click_control"] = {}
             self.config["click_control"]["inspection_height"] = inspection_height
+            self.config["click_control"]["camera_mounting_angle"] = float(self.setting_camera_angle.text())
             
             # Update inspection data manager if it exists
             if hasattr(self, 'inspect_data_manager') and self.inspect_data_manager:

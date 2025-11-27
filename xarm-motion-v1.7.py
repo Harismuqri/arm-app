@@ -910,6 +910,8 @@ class XArmController:
 
                 # Calculate camera angle for gripper rotation
                 camera_angle = self.calculate_optimal_inspect_angle(object_angle)
+                camera_mounting_angle = self.config.get("click_control", {}).get("camera_mounting_angle", 0)
+                camera_angle = camera_angle + camera_mounting_angle
 
                 # Apply offset errors to base offsets
                 effective_offset_x = offset_x + offset_error_x
@@ -944,6 +946,8 @@ class XArmController:
                 # camera_angle is used ONLY for camera/gripper rotation
                 offset_position = object_angle  # Use object angle directly for position calculation
                 camera_angle = self.calculate_optimal_inspect_angle(object_angle)  # Separate camera rotation
+                camera_mounting_angle = self.config.get("click_control", {}).get("camera_mounting_angle", 0)
+                camera_angle = camera_angle + camera_mounting_angle
 
                 # Apply offset errors to base offsets
                 effective_offset_x = offset_x + offset_error_x

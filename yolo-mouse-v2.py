@@ -65,8 +65,11 @@ def load_config(config_path="config.json"):
 # Load config
 CONFIG = load_config()
 
-# Load your OBB YOLOv8 model
-model_path = CONFIG.get("yolo_model_path", "D:\\2. yolo\\train30\\weights\\best.pt")
+# Load your OBB YOLOv8 model - use path relative to script location
+model_path = CONFIG.get("yolo_model_path", "models/best.pt")
+if not os.path.isabs(model_path):  # If relative path
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    model_path = os.path.join(script_dir, model_path)
 model = YOLO(model_path)
 model.overrides['verbose'] = False
 print(f"[YOLO] Model loaded from: {model_path}")

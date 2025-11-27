@@ -16,6 +16,7 @@
     "click_control": {
         "safe_height": 150,
         "pick_height": -2,
+        "camera_mounting_angle": 0.0,
         "inspection_height": 103.4,
         "workspace_min_x": 0,
         "workspace_max_x": 300,
@@ -24,7 +25,7 @@
         "coordinate_offset_x": 0,
         "coordinate_offset_y": -150
     },
-    "_comment_vision": "=== Vision System Settings (arm-app-v1.1.py) ===",
+    "_comment_vision": "=== Vision System Settings (arm-app-v1.2.py) ===",
     "yolo_model_path": "D:\\2. yolo\\train30\\weights\\best.pt",
     "detection_confidence": 0.8,
     "camera_config": {
