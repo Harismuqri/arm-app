@@ -191,7 +191,7 @@ def Ydraw_transformed_box(frame, H_inv, width_mm=None, height_mm=None):
         [0, height_mm]
     ], dtype=np.float32).reshape(-1, 1, 2)
     box_img = cv2.perspectiveTransform(box_real, H_inv).reshape(-1, 2).astype(int)
-    cv2.polylines(frame, [box_img], isClosed=True, color=(255, 255, 255), thickness=3)
+    cv2.polylines(frame, [box_img], isClosed=True, color=(255, 255, 0), thickness=3)
 
 def point_in_polygon(point, polygon):
     """Check if a point is inside a polygon"""
