@@ -2735,7 +2735,7 @@ class RobotVisionGUI(QMainWindow):
         ], dtype=np.float32).reshape(-1, 1, 2)
 
         box_img = cv2.perspectiveTransform(box_real, H_inv).reshape(-1, 2).astype(int)
-        cv2.polylines(frame, [box_img], isClosed=True, color=(255, 255, 255), thickness=3)
+        cv2.polylines(frame, [box_img], isClosed=True, color=(255, 255, 0), thickness=3)
 
     def display_frame(self, frame, label):
         """Display OpenCV frame in QLabel"""
