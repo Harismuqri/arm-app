@@ -288,29 +288,10 @@ def draw_info_panel(frame, x, y, info_lines, title="Info"):
 
     return frame
 
-def draw_inspection_crosshair(frame, x, y):
-    """Draw inspection crosshair with error tolerance indicator"""
-    # Red crosshair
-    line_length = 40
-    thickness = 3
-    color = (0, 0, 255)
-
-    cv2.line(frame, (x - line_length, y), (x + line_length, y), color, thickness)
-    cv2.line(frame, (x, y - line_length), (x, y + line_length), color, thickness)
-
-    # Green center circle
-    cv2.circle(frame, (x, y), 10, (0, 255, 0), 2)
-
-    # Error tolerance indicator (yellow, dashed circle if errors > 0)
-    if CAMERA_OFFSET_ERROR_X > 0 or CAMERA_OFFSET_ERROR_Y > 0:
-        error_radius_px = 15
-        for angle in range(0, 360, 30):
-            angle_rad = np.radians(angle)
-            x1 = int(x + error_radius_px * np.cos(angle_rad))
-            y1 = int(y + error_radius_px * np.sin(angle_rad))
-            x2 = int(x + error_radius_px * np.cos(angle_rad + np.radians(15)))
-            y2 = int(y + error_radius_px * np.sin(angle_rad + np.radians(15)))
-            cv2.line(frame, (x1, y1), (x2, y2), (0, 255, 255), 1)
+def draw_inspection_center(frame, x, y):
+    """Draw red center point for inspection camera"""
+    # Red center point (filled circle)
+    cv2.circle(frame, (x, y), 5, (0, 0, 255), -1)  # -1 = filled
 
 class DetectionDataManager:
     """Manages shared memory for detection data."""
@@ -1115,8 +1096,8 @@ def main():
                 h, w = frame_inspect.shape[:2]
                 center_x, center_y = w // 2, h // 2
 
-                # Draw inspection crosshair
-                draw_inspection_crosshair(frame_inspect, center_x, center_y)
+                # Draw red center point
+                draw_inspection_center(frame_inspect, center_x, center_y)
 
                 # Calculate angle-based error offset if object is selected
                 if selected_object:
