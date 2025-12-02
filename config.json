@@ -26,7 +26,7 @@
         "coordinate_offset_y": -150
     },
     "_comment_vision": "=== Vision System Settings (arm-app-v1.2.py) ===",
-    "yolo_model_path": "D:\\2.yolo\\train30\\weights\\best.pt",
+    "yolo_model_path": "D:\\2. yolo\\train30\\weights\\best.pt",
     "detection_confidence": 0.8,
     "camera_config": {
         "detection_camera_index": 0,
